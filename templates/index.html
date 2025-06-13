@@ -71,11 +71,8 @@
         </div>
       </div>
       <div class="col-md-4">
-        <button class="btn btn-success me-2" id="uploadLogBtn">
-          <i class="fas fa-upload me-1"></i>上傳新的 LOG 檔案
-        </button>
-        <button class="btn btn-info" id="mergeAnalysisBtn">
-          <i class="fas fa-layer-group me-1"></i>合併分析檔案
+        <button class="btn btn-outline-info btn-sm" id="switchAnalysisBtn">
+          <i class="fas fa-exchange-alt me-1"></i>切換分析檔案
         </button>
       </div>
     </div>
@@ -466,14 +463,30 @@
            <div class="col-md-6">
              <div class="card">
                <div class="card-header">
-                 <h6 class="card-title mb-0"><i class="fas fa-upload me-2"></i>上傳 LOG 檔案</h6>
+                 <h6 class="card-title mb-0"><i class="fas fa-upload me-2"></i>上傳檔案</h6>
                </div>
                <div class="card-body">
-                 <form id="uploadForm" enctype="multipart/form-data">
+                 <!-- 上傳模式選擇 -->
+                 <div class="mb-3">
+                   <div class="btn-group w-100" role="group">
+                     <input type="radio" class="btn-check" name="uploadMode" id="singleMode" value="single" checked>
+                     <label class="btn btn-outline-primary" for="singleMode">
+                       <i class="fas fa-file me-1"></i>單檔上傳
+                     </label>
+                     
+                     <input type="radio" class="btn-check" name="uploadMode" id="multipleMode" value="multiple">
+                     <label class="btn btn-outline-primary" for="multipleMode">
+                       <i class="fas fa-files me-1"></i>批量上傳
+                     </label>
+                   </div>
+                 </div>
+
+                 <!-- 單檔上傳表單 -->
+                 <form id="uploadForm" enctype="multipart/form-data" class="upload-form">
                    <div class="mb-3">
-                     <label for="logFile" class="form-label">選擇 LOG 檔案：</label>
-                     <input type="file" class="form-control" id="logFile" name="file" accept=".log,.txt" required>
-                     <div class="form-text">支援 .log 和 .txt 格式</div>
+                     <label for="logFile" class="form-label">選擇檔案：</label>
+                     <input type="file" class="form-control" id="logFile" name="file" required>
+                     <div class="form-text">支援任何文字格式檔案</div>
                    </div>
                    <div class="mb-3">
                      <label for="analysisName" class="form-label">分析檔案名稱：</label>
@@ -483,6 +496,36 @@
                    </div>
                    <button type="submit" class="btn btn-primary" id="uploadSubmitBtn">
                      <i class="fas fa-upload me-1"></i>上傳並分析
+                   </button>
+                 </form>
+
+                 <!-- 多檔上傳表單 -->
+                 <form id="multipleUploadForm" enctype="multipart/form-data" class="upload-form d-none">
+                   <div class="mb-3">
+                     <label for="multipleLogFiles" class="form-label">選擇多個檔案：</label>
+                     <input type="file" class="form-control" id="multipleLogFiles" name="files" multiple required>
+                     <div class="form-text">
+                       <i class="fas fa-info-circle me-1"></i>
+                       支援任何格式，可同時選擇多個檔案（最多20個）
+                     </div>
+                   </div>
+                   <div class="mb-3">
+                     <label for="multipleAnalysisName" class="form-label">分析檔案名稱：</label>
+                     <input type="text" class="form-control" id="multipleAnalysisName" name="analysis_name" required 
+                            placeholder="例如：合併分析_2024-01-15">
+                     <div class="form-text">批量檔案將合併為一個分析</div>
+                   </div>
+                   
+                   <!-- 檔案預覽 -->
+                   <div id="filePreview" class="mb-3 d-none">
+                     <label class="form-label">已選擇的檔案：</label>
+                     <div id="fileList" class="border rounded p-2 bg-light" style="max-height: 150px; overflow-y: auto;">
+                       <!-- 檔案列表將在這裡顯示 -->
+                     </div>
+                   </div>
+                   
+                   <button type="submit" class="btn btn-success" id="multipleUploadSubmitBtn">
+                     <i class="fas fa-layer-group me-1"></i>批量上傳並合併分析
                    </button>
                  </form>
                </div>
@@ -548,14 +591,15 @@
      <div class="modal-dialog">
        <div class="modal-content">
          <div class="modal-header">
-           <h5 class="modal-title"><i class="fas fa-upload me-2"></i>上傳 LOG 檔案</h5>
+           <h5 class="modal-title"><i class="fas fa-upload me-2"></i>上傳檔案</h5>
            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
          </div>
          <div class="modal-body">
            <form id="quickUploadForm" enctype="multipart/form-data">
              <div class="mb-3">
-               <label for="quickLogFile" class="form-label">選擇 LOG 檔案：</label>
-               <input type="file" class="form-control" id="quickLogFile" name="file" accept=".log,.txt" required>
+               <label for="quickLogFile" class="form-label">選擇檔案：</label>
+               <input type="file" class="form-control" id="quickLogFile" name="file" required>
+               <div class="form-text">支援任何文字格式檔案</div>
              </div>
              <div class="mb-3">
                <label for="quickAnalysisName" class="form-label">分析檔案名稱：</label>
@@ -1489,7 +1533,7 @@
            const formData = new FormData(form);
            
            $('#uploadProgress').removeClass('d-none');
-           $('#uploadStatusText').text('正在上傳並分析 LOG 檔案，請稍候...');
+           $('#uploadStatusText').text('正在上傳並分析檔案，請稍候...');
 
            $.ajax({
              url: '/api/upload_log',
@@ -1516,6 +1560,123 @@
              }
            });
          }
+
+         // 上傳模式切換功能
+         $('input[name="uploadMode"]').on('change', function() {
+           const mode = $(this).val();
+           if (mode === 'single') {
+             $('#uploadForm').removeClass('d-none');
+             $('#multipleUploadForm').addClass('d-none');
+           } else {
+             $('#uploadForm').addClass('d-none');
+             $('#multipleUploadForm').removeClass('d-none');
+           }
+         });
+
+         // 多檔案選擇時顯示檔案列表
+         $('#multipleLogFiles').on('change', function() {
+           const files = this.files;
+           if (files.length > 0) {
+             let fileListHtml = '';
+             let totalSize = 0;
+             
+             for (let i = 0; i < files.length; i++) {
+               const file = files[i];
+               const sizeStr = (file.size / 1024 / 1024).toFixed(2) + ' MB';
+               totalSize += file.size;
+               
+               fileListHtml += `
+                 <div class="d-flex justify-content-between align-items-center py-1 border-bottom">
+                   <div>
+                     <i class="fas fa-file-text me-2 text-muted"></i>
+                     <strong>${file.name}</strong>
+                   </div>
+                   <small class="text-muted">${sizeStr}</small>
+                 </div>
+               `;
+             }
+             
+             const totalSizeStr = (totalSize / 1024 / 1024).toFixed(2) + ' MB';
+             fileListHtml += `
+               <div class="d-flex justify-content-between align-items-center py-2 mt-2 bg-info text-white rounded px-2">
+                 <strong>總計：${files.length} 個檔案</strong>
+                 <strong>${totalSizeStr}</strong>
+               </div>
+             `;
+             
+             $('#fileList').html(fileListHtml);
+             $('#filePreview').removeClass('d-none');
+           } else {
+             $('#filePreview').addClass('d-none');
+           }
+         });
+
+         // 多檔案上傳表單提交
+         $('#multipleUploadForm').on('submit', function(e) {
+           e.preventDefault();
+           
+           const files = $('#multipleLogFiles')[0].files;
+           const analysisName = $('#multipleAnalysisName').val().trim();
+           
+           if (files.length === 0) {
+             alert('請選擇至少一個檔案');
+             return;
+           }
+           
+           if (files.length > 20) {
+             alert('一次最多只能上傳 20 個檔案');
+             return;
+           }
+           
+           if (!analysisName) {
+             alert('請輸入分析檔案名稱');
+             return;
+           }
+           
+           const formData = new FormData();
+           
+           // 添加所有檔案
+           for (let i = 0; i < files.length; i++) {
+             formData.append('files', files[i]);
+           }
+           formData.append('analysis_name', analysisName);
+           
+           $('#uploadProgress').removeClass('d-none');
+           $('#uploadStatusText').text(`正在上傳並合併分析 ${files.length} 個檔案，請稍候...`);
+           
+           $.ajax({
+             url: '/api/upload_multiple_logs',
+             method: 'POST',
+             data: formData,
+             processData: false,
+             contentType: false,
+             success: function(response) {
+               $('#uploadProgress').addClass('d-none');
+               
+               if (response.success) {
+                 let message = `批量上傳成功！\n`;
+                 message += `分析名稱：${response.analysis_name}\n`;
+                 message += `檔案數量：${response.files_count}\n`;
+                 message += `總大小：${(response.total_size / 1024 / 1024).toFixed(2)} MB\n`;
+                 message += `查詢數：${response.total_queries}\n`;
+                 message += `樣板數：${response.total_templates}`;
+                 
+                 alert(message);
+                 
+                 // 清空表單
+                 $('#multipleUploadForm')[0].reset();
+                 $('#filePreview').addClass('d-none');
+                 
+                 // 重新載入檔案列表
+                 window.loadFilesList();
+               }
+             },
+             error: function(xhr) {
+               $('#uploadProgress').addClass('d-none');
+               alert(`批量上傳失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
+             }
+           });
+         });
 
          // 合併分析檔案功能
          let selectedMergeFiles = [];
