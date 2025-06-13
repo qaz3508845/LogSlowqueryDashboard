@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL 慢查詢分析 Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        [x-cloak] { display: none !important; }
+        .htmx-indicator {
+            opacity: 0;
+            transition: opacity 0.3s ease-in;
+        }
+        .htmx-request .htmx-indicator {
+            opacity: 1;
+        }
+        .sql-code {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- 版本切換按鈕 -->
+    <div class="fixed top-4 right-4 z-50">
+        <div class="bg-white rounded-lg shadow-md border border-gray-200 p-2">
+            <div class="flex space-x-2">
+                <button onclick="window.location.href='/'" 
+                        class="px-3 py-2 bg-blue-600 text-white rounded-md text-sm font-medium">
+                    <i class="fas fa-sparkles mr-1"></i>新版
+                </button>
+                <button onclick="window.location.href='/legacy'" 
+                        class="px-3 py-2 bg-gray-600 text-white rounded-md text-sm font-medium">
+                    <i class="fas fa-history mr-1"></i>舊版
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 頁面標題和狀態 -->
+    {% include 'components/header.html' %}
+
+    <!-- 導航選單 -->
+    {% include 'components/navigation.html' %}
+
+    <!-- 主要內容區域 -->
+    <div id="main-content" class="min-h-screen">
+        <!-- 預設載入樣板統計頁面 -->
+        <div hx-get="/components/summary" 
+             hx-trigger="load" 
+             hx-target="this" 
+             hx-swap="outerHTML">
+            <!-- 載入中 -->
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="animate-pulse space-y-6">
+                    <div class="h-8 bg-gray-200 rounded w-1/4"></div>
+                    <div class="h-32 bg-gray-200 rounded"></div>
+                    <div class="h-64 bg-gray-200 rounded"></div>
+                </div>
+                <p class="text-center text-gray-500 mt-8">載入中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 容器 -->
+    <div id="modal-container"></div>
+
+    <!-- 全域工具函數 -->
+    <script>
+        // 檔案大小格式化
+        window.formatFileSize = function(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        };
+
+        // Toast 通知（如果需要）
+        window.showToast = function(message, type = 'info') {
+            // 簡單的 alert 實現，可以後續擴展為更好的 toast
+            alert(message);
+        };
+
+        // HTMX 事件監聽
+        document.addEventListener('htmx:afterRequest', function(event) {
+            if (event.detail.xhr.status >= 400) {
+                console.error('HTMX 請求錯誤:', event.detail.xhr.statusText);
+            }
+        });
+
+        // 當頁面載入完成時，觸發其他組件載入
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('現代化 SQL 分析 Dashboard 已載入');
+        });
+    </script>
+</body>
+</html> 

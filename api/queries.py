@@ -2,16 +2,18 @@
 查詢相關 API 路由
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from core.data_manager import DataManager
 from core.sql_analyzer import SQLAnalyzer
-
-router = APIRouter(prefix="/api", tags=["queries"])
+from typing import Optional, List, Dict, Any
 
 
 def create_query_routes(data_manager: DataManager):
     """創建查詢相關路由"""
     
+    # 在函數內創建 router，確保每次都是新的實例
+    router = APIRouter(prefix="/api", tags=["queries"])
+
     @router.get("/raw_sqls/{template_index}")
     async def get_raw_sqls(template_index: int):
         """取得指定樣板的原始SQL列表"""

@@ -180,50 +180,108 @@ class DataManager:
             "current_analysis": self.current_analysis.name
         }
     
-    def get_analysis_files(self) -> List[Dict[str, Any]]:
-        """
-        取得可用的分析檔案列表
-        
-        Returns:
-            List[Dict[str, Any]]: 分析檔案列表
-        """
+    def get_analysis_files(self) -> Dict[str, Any]:
+        """獲取所有分析檔案列表"""
         analysis_files = []
         
-        # 檢查是否有預設分析檔案
-        has_default_files = (
-            Path("parsed_slow_log.json").exists() and 
-            Path("normalized_sql_summary.json").exists()
-        )
-        
-        # 只有當預設分析檔案存在且有資料時才顯示
-        if has_default_files and self.current_analysis.name == "預設分析" and len(self.current_analysis.raw_data) > 0:
-            analysis_files.append({
-                "name": "預設分析",
-                "is_current": True,
-                "metadata": {
-                    "total_queries": len(self.current_analysis.raw_data),
-                    "total_templates": len(self.current_analysis.summary_data),
-                    "upload_time": "內建資料"
-                }
-            })
-        
-        # 用戶上傳的分析檔案
+        # 檢查分析目錄中的分析檔案
         if self.data_dir.exists():
-            for item in self.data_dir.iterdir():
-                if item.is_dir() and (item / "summary.json").exists():
+            for analysis_path in self.data_dir.iterdir():
+                if analysis_path.is_dir() and (analysis_path / "summary.json").exists():
                     try:
-                        with open(item / "metadata.json", "r", encoding="utf-8") as f:
-                            metadata = json.load(f)
-                    except:
-                        metadata = {"upload_time": "未知", "total_queries": 0, "total_templates": 0}
-                    
-                    analysis_files.append({
-                        "name": item.name,
-                        "is_current": self.current_analysis.name == item.name,
-                        "metadata": metadata
-                    })
+                        metadata = self._load_metadata(analysis_path.name)
+                        analysis_files.append({
+                            "name": analysis_path.name,
+                            "is_current": analysis_path.name == self.current_analysis.name,
+                            "metadata": metadata
+                        })
+                    except Exception as e:
+                        print(f"⚠️ 無法載入 {analysis_path.name} 的資訊: {e}")
+                
+        return {
+            "analysis_files": sorted(analysis_files, key=lambda x: x["metadata"].get("upload_time", ""), reverse=True)
+        }
+
+    def _load_metadata(self, analysis_name: str) -> Dict[str, Any]:
+        """載入分析檔案的元資料"""
+        metadata_file = self.data_dir / analysis_name / "metadata.json"
+        if metadata_file.exists():
+            try:
+                with open(metadata_file, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"⚠️ 載入元資料失敗: {e}")
         
-        return analysis_files
+        # 返回預設元資料
+        return {
+            "total_queries": 0,
+            "total_templates": 0,
+            "upload_time": "未知"
+        }
+
+    def get_current_analysis_info(self) -> Dict[str, Any]:
+        """獲取當前分析的基本資訊"""
+        # 移除自動載入邏輯，避免在切換分析檔案後又被自動切換回第一個檔案
+        # if not self.current_analysis.summary_data and len(self.current_analysis.raw_data) == 0:
+        #     # 如果當前沒有資料，嘗試載入第一個可用的分析檔案
+        #     files_data = self.get_analysis_files()
+        #     if files_data["analysis_files"]:
+        #         try:
+        #             first_analysis = files_data["analysis_files"][0]["name"]
+        #             self.load_analysis_data(first_analysis)
+        #             print(f"🔄 自動載入分析檔案: {first_analysis}")
+        #         except Exception as e:
+        #             print(f"⚠️ 自動載入失敗: {e}")
+
+        metadata = self._load_metadata(self.current_analysis.name)
+        return {
+            "name": self.current_analysis.name,
+            "total_queries": metadata.get("total_queries", 0),
+            "total_templates": metadata.get("total_templates", 0),
+            "upload_time": metadata.get("upload_time", "未知")
+        }
+
+    def get_template_data(self) -> List[Dict[str, Any]]:
+        """獲取樣板統計資料（用於模板）"""
+        template_data = []
+        for item in self.current_analysis.summary_data:
+            template_data.append({
+                "template": item.template,
+                "type": item.type,
+                "count": item.count,
+                "avg_query_time": item.avg_query_time,
+                "tables_used": item.tables_used
+            })
+        return template_data
+
+    def get_basic_stats(self) -> Dict[str, Any]:
+        """獲取基本統計資訊"""
+        if not self.current_analysis.raw_data:
+            return {
+                "total_queries": 0,
+                "avg_time": 0.0,
+                "max_time": 0.0,
+                "median_time": 0.0
+            }
+
+        # 過濾掉 None 值
+        query_times = [item.query_time for item in self.current_analysis.raw_data if item.query_time is not None]
+        if not query_times:
+            return {
+                "total_queries": len(self.current_analysis.raw_data),
+                "avg_time": 0.0,
+                "max_time": 0.0,
+                "median_time": 0.0
+            }
+
+        query_times.sort()
+        
+        return {
+            "total_queries": len(self.current_analysis.raw_data),
+            "avg_time": sum(query_times) / len(query_times),
+            "max_time": max(query_times),
+            "median_time": query_times[len(query_times) // 2]
+        }
     
     def merge_analysis(self, merged_name: str, source_files: List[str]) -> Dict[str, Any]:
         """

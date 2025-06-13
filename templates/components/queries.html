@@ -1,0 +1,176 @@
+<!-- 原始查詢列表頁面 -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- 頁面標題 -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">原始查詢列表</h2>
+        <p class="mt-2 text-gray-600">查看詳細的 SQL 查詢記錄和執行資訊</p>
+    </div>
+
+    <!-- 篩選控制區域 -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6" x-data="queriesFilter()">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-search mr-2 text-blue-600"></i>
+                搜尋與篩選
+            </h3>
+        </div>
+        
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <!-- 關鍵字搜尋 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">關鍵字搜尋</label>
+                    <input 
+                        x-model="filters.search" 
+                        type="text" 
+                        placeholder="搜尋 SQL 內容"
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                
+                <!-- 最小執行時間 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">最小時間 (秒)</label>
+                    <input 
+                        x-model="filters.minTime" 
+                        type="number" 
+                        step="0.1" 
+                        placeholder="0"
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+                
+                <!-- SQL 類型 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">SQL 類型</label>
+                    <select x-model="filters.type" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        <option value="">全部</option>
+                        <option value="SELECT">SELECT</option>
+                        <option value="INSERT">INSERT</option>
+                        <option value="UPDATE">UPDATE</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="OTHER">OTHER</option>
+                    </select>
+                </div>
+                
+                <!-- 用戶 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">用戶名稱</label>
+                    <input 
+                        x-model="filters.user" 
+                        type="text" 
+                        placeholder="用戶名稱"
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                </div>
+            </div>
+            
+            <!-- 快速篩選按鈕 -->
+            <div class="mt-4 flex flex-wrap gap-2">
+                <button @click="applyQuickFilter('slow')" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 transition-colors">
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
+                    > 10 秒
+                </button>
+                <button @click="applyQuickFilter('very-slow')" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-700 hover:bg-red-800 transition-colors">
+                    <i class="fas fa-times-circle mr-1"></i>
+                    > 30 秒
+                </button>
+                <button @click="applyQuickFilter('minute')" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-800 hover:bg-red-900 transition-colors">
+                    <i class="fas fa-exclamation-circle mr-1"></i>
+                    > 1 分鐘
+                </button>
+                <button @click="clearFilters()" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors">
+                    <i class="fas fa-undo mr-1"></i>
+                    清除篩選
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 查詢結果 -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                    <i class="fas fa-list mr-2 text-blue-600"></i>
+                    查詢記錄
+                </h3>
+                <div class="text-sm text-gray-500">
+                    正在載入資料...
+                </div>
+            </div>
+        </div>
+        
+        <!-- 載入資料的提示 -->
+        <div class="p-8 text-center">
+            <div class="animate-pulse">
+                <div class="flex justify-center mb-4">
+                    <i class="fas fa-spinner fa-spin text-2xl text-blue-600"></i>
+                </div>
+                <h4 class="text-lg font-medium text-gray-900 mb-2">正在載入查詢資料</h4>
+                <p class="text-gray-500">這個功能正在開發中，將很快提供完整的查詢列表功能</p>
+            </div>
+            
+            <!-- 功能預告 -->
+            <div class="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                        <i class="fas fa-table text-blue-600 mr-2"></i>
+                        <h5 class="font-medium text-gray-900">詳細列表</h5>
+                    </div>
+                    <p class="text-sm text-gray-600">完整的 SQL 查詢記錄表格</p>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                        <i class="fas fa-search text-green-600 mr-2"></i>
+                        <h5 class="font-medium text-gray-900">進階搜尋</h5>
+                    </div>
+                    <p class="text-sm text-gray-600">支援多條件搜尋和篩選</p>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-4">
+                    <div class="flex items-center mb-2">
+                        <i class="fas fa-download text-purple-600 mr-2"></i>
+                        <h5 class="font-medium text-gray-900">資料匯出</h5>
+                    </div>
+                    <p class="text-sm text-gray-600">支援 CSV、Excel 格式匯出</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function queriesFilter() {
+    return {
+        filters: {
+            search: '',
+            minTime: '',
+            type: '',
+            user: ''
+        },
+        
+        applyQuickFilter(type) {
+            if (type === 'slow') {
+                this.filters.minTime = '10';
+            } else if (type === 'very-slow') {
+                this.filters.minTime = '30';
+            } else if (type === 'minute') {
+                this.filters.minTime = '60';
+            }
+            this.filterQueries();
+        },
+        
+        clearFilters() {
+            this.filters = {
+                search: '',
+                minTime: '',
+                type: '',
+                user: ''
+            };
+            this.filterQueries();
+        },
+        
+        filterQueries() {
+            console.log('Filtering queries:', this.filters);
+            // 實現查詢篩選邏輯
+        }
+    }
+}
+</script> 

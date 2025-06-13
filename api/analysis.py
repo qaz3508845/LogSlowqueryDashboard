@@ -5,11 +5,12 @@
 from fastapi import APIRouter, HTTPException, Request
 from core.data_manager import DataManager
 
-router = APIRouter(prefix="/api", tags=["analysis"])
-
 
 def create_analysis_routes(data_manager: DataManager):
     """創建分析管理相關路由"""
+    
+    # 在函數內創建 router，確保每次都是新的實例
+    router = APIRouter(prefix="/api", tags=["analysis"])
     
     @router.post("/switch_analysis/{analysis_name}")
     async def switch_analysis(analysis_name: str):
@@ -28,7 +29,7 @@ def create_analysis_routes(data_manager: DataManager):
     async def get_analysis_files():
         """取得可用的分析檔案列表"""
         analysis_files = data_manager.get_analysis_files()
-        return {"analysis_files": analysis_files}
+        return analysis_files
     
     @router.delete("/analysis_files/{analysis_name}")
     async def delete_analysis(analysis_name: str):

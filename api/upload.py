@@ -2,20 +2,21 @@
 檔案上傳相關 API 路由
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from typing import List
+from fastapi import APIRouter, File, UploadFile, Form, HTTPException
 from core.data_manager import DataManager
-
-router = APIRouter(prefix="/api", tags=["upload"])
+from typing import List
 
 
 def create_upload_routes(data_manager: DataManager):
-    """創建上傳相關路由"""
+    """創建檔案上傳相關路由"""
     
+    # 在函數內創建 router，確保每次都是新的實例
+    router = APIRouter(prefix="/api", tags=["upload"])
+
     @router.post("/upload_log")
     async def upload_log(
         file: UploadFile = File(...),
-        analysis_name: str = Form(...)
+        analysis_name: str = Form(None)
     ):
         """上傳單個檔案分析"""
         
@@ -26,6 +27,13 @@ def create_upload_routes(data_manager: DataManager):
             
             # 確保檔案名稱不為 None
             filename = file.filename or "unknown_file"
+            
+            # 如果沒有提供分析名稱，自動生成
+            if not analysis_name or analysis_name.strip() == "":
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                base_name = filename.split('.')[0] if '.' in filename else filename
+                analysis_name = f"{base_name}_{timestamp}"
             
             # 儲存並分析
             result = data_manager.save_analysis(analysis_name, log_content, filename)
@@ -38,7 +46,7 @@ def create_upload_routes(data_manager: DataManager):
     @router.post("/upload_multiple_logs")
     async def upload_multiple_logs(
         files: List[UploadFile] = File(...),
-        analysis_name: str = Form(...)
+        analysis_name: str = Form(None)
     ):
         """批量上傳多個檔案並合併分析"""
         
@@ -47,6 +55,15 @@ def create_upload_routes(data_manager: DataManager):
         
         if len(files) > 20:
             raise HTTPException(status_code=400, detail="一次最多上傳 20 個檔案")
+        
+        # 如果沒有提供分析名稱，自動生成
+        if not analysis_name or analysis_name.strip() == "":
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            if len(files) == 1:
+                analysis_name = f"分析_{timestamp}"
+            else:
+                analysis_name = f"批量分析_{len(files)}檔_{timestamp}"
         
         try:
             # 收集所有檔案內容

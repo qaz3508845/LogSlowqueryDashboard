@@ -1,0 +1,216 @@
+<!-- 效能分析頁面 -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <!-- 頁面標題 -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">效能分析</h2>
+        <p class="mt-2 text-gray-600">深入分析 SQL 查詢效能和統計數據</p>
+    </div>
+
+    <!-- 基本統計卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <!-- 總查詢數 -->
+        <div class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-sm text-white p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-blue-100 text-sm font-medium">總查詢數</p>
+                    <p class="text-2xl font-bold">{{ "{:,}".format(stats.total_queries) }}</p>
+                </div>
+                <div class="bg-blue-400 bg-opacity-50 rounded-full p-3">
+                    <i class="fas fa-database text-xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 平均執行時間 -->
+        <div class="bg-gradient-to-r from-green-500 to-green-600 rounded-lg shadow-sm text-white p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-green-100 text-sm font-medium">平均執行時間</p>
+                    <p class="text-2xl font-bold">{{ "%.3f"|format(stats.avg_time) }}s</p>
+                </div>
+                <div class="bg-green-400 bg-opacity-50 rounded-full p-3">
+                    <i class="fas fa-clock text-xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 最大執行時間 -->
+        <div class="bg-gradient-to-r from-red-500 to-red-600 rounded-lg shadow-sm text-white p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-red-100 text-sm font-medium">最大執行時間</p>
+                    <p class="text-2xl font-bold">{{ "%.3f"|format(stats.max_time) }}s</p>
+                </div>
+                <div class="bg-red-400 bg-opacity-50 rounded-full p-3">
+                    <i class="fas fa-exclamation-triangle text-xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- 中位數時間 -->
+        <div class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg shadow-sm text-white p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-purple-100 text-sm font-medium">中位數時間</p>
+                    <p class="text-2xl font-bold">{{ "%.3f"|format(stats.median_time) }}s</p>
+                </div>
+                <div class="bg-purple-400 bg-opacity-50 rounded-full p-3">
+                    <i class="fas fa-chart-line text-xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 圖表和分析區域 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <!-- SQL 類型分布圖 -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                    <i class="fas fa-pie-chart mr-2 text-blue-600"></i>
+                    SQL 類型分布
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
+                    <div class="text-center">
+                        <i class="fas fa-chart-pie text-4xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500">圖表功能開發中</p>
+                        <p class="text-sm text-gray-400 mt-2">將使用 Chart.js 實現</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 執行時間分布圖 -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                    <i class="fas fa-bar-chart mr-2 text-blue-600"></i>
+                    執行時間分布
+                </h3>
+            </div>
+            <div class="p-6">
+                <div class="h-64 flex items-center justify-center bg-gray-50 rounded-lg">
+                    <div class="text-center">
+                        <i class="fas fa-chart-bar text-4xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500">圖表功能開發中</p>
+                        <p class="text-sm text-gray-400 mt-2">時間分布直方圖</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 效能建議 -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-8">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-lightbulb mr-2 text-yellow-600"></i>
+                效能建議
+            </h3>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- 慢查詢警告 -->
+                {% if stats.max_time > 30 %}
+                <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle text-red-600 mr-3"></i>
+                        <div>
+                            <h4 class="text-sm font-medium text-red-800">發現極慢查詢</h4>
+                            <p class="text-sm text-red-700 mt-1">最長執行時間超過 30 秒，建議立即優化</p>
+                        </div>
+                    </div>
+                </div>
+                {% elif stats.max_time > 10 %}
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-exclamation-triangle text-yellow-600 mr-3"></i>
+                        <div>
+                            <h4 class="text-sm font-medium text-yellow-800">發現慢查詢</h4>
+                            <p class="text-sm text-yellow-700 mt-1">最長執行時間超過 10 秒，建議檢查索引</p>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-600 mr-3"></i>
+                        <div>
+                            <h4 class="text-sm font-medium text-green-800">效能良好</h4>
+                            <p class="text-sm text-green-700 mt-1">所有查詢執行時間都在可接受範圍內</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- 平均時間建議 -->
+                {% if stats.avg_time > 5 %}
+                <div class="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-clock text-orange-600 mr-3"></i>
+                        <div>
+                            <h4 class="text-sm font-medium text-orange-800">平均時間偏高</h4>
+                            <p class="text-sm text-orange-700 mt-1">考慮添加適當的索引以提升整體效能</p>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-thumbs-up text-blue-600 mr-3"></i>
+                        <div>
+                            <h4 class="text-sm font-medium text-blue-800">平均效能優良</h4>
+                            <p class="text-sm text-blue-700 mt-1">大部分查詢效能表現良好</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- 快速統計表格 -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-table mr-2 text-blue-600"></i>
+                快速統計
+            </h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">統計項目</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">數值</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">描述</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">總查詢數</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ "{:,}".format(stats.total_queries) }}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">分析的 SQL 查詢總數</td>
+                    </tr>
+                    <tr class="bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">平均執行時間</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ "%.6f"|format(stats.avg_time) }} 秒</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">所有查詢的平均執行時間</td>
+                    </tr>
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">最大執行時間</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ "%.6f"|format(stats.max_time) }} 秒</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">單一查詢的最長執行時間</td>
+                    </tr>
+                    <tr class="bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">中位數時間</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{{ "%.6f"|format(stats.median_time) }} 秒</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">執行時間的中位數，更能反映常態效能</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div> 

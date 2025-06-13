@@ -52,6 +52,20 @@
   </style>
 </head>
 <body class="bg-light">
+  <!-- 版本切換按鈕 -->
+  <div class="position-fixed" style="top: 20px; right: 20px; z-index: 1050;">
+    <div class="bg-white border rounded p-2 shadow-sm">
+      <div class="btn-group btn-group-sm">
+        <a href="/" class="btn btn-primary">
+          <i class="fas fa-sparkles me-1"></i>新版
+        </a>
+        <a href="/legacy" class="btn btn-secondary">
+          <i class="fas fa-history me-1"></i>舊版
+        </a>
+      </div>
+    </div>
+  </div>
+
   <div class="container-fluid mt-4">
     <div class="row">
       <div class="col-12">
@@ -61,19 +75,11 @@
 
     <!-- 當前分析檔案資訊 -->
     <div class="row mb-3">
-      <div class="col-md-8">
+      <div class="col-12">
         <div class="alert alert-info d-flex align-items-center">
           <i class="fas fa-info-circle me-2"></i>
           <span>當前分析檔案：<strong id="currentAnalysisName">{{ current_analysis }}</strong></span>
-          <button class="btn btn-outline-primary btn-sm ms-3" id="switchAnalysisBtn">
-            <i class="fas fa-exchange-alt me-1"></i>切換分析檔案
-          </button>
         </div>
-      </div>
-      <div class="col-md-4">
-        <button class="btn btn-outline-info btn-sm" id="switchAnalysisBtn">
-          <i class="fas fa-exchange-alt me-1"></i>切換分析檔案
-        </button>
       </div>
     </div>
 
@@ -489,10 +495,10 @@
                      <div class="form-text">支援任何文字格式檔案</div>
                    </div>
                    <div class="mb-3">
-                     <label for="analysisName" class="form-label">分析檔案名稱：</label>
-                     <input type="text" class="form-control" id="analysisName" name="analysis_name" required 
-                            placeholder="例如：2024-01-15_production">
-                     <div class="form-text">請輸入易於識別的名稱</div>
+                     <label for="analysisName" class="form-label">分析檔案名稱 <small class="text-muted">(選填)</small>：</label>
+                     <input type="text" class="form-control" id="analysisName" name="analysis_name" 
+                            placeholder="例如：2024-01-15_production (留空則自動命名)">
+                     <div class="form-text">留空則根據檔案名和時間自動命名</div>
                    </div>
                    <button type="submit" class="btn btn-primary" id="uploadSubmitBtn">
                      <i class="fas fa-upload me-1"></i>上傳並分析
@@ -510,10 +516,10 @@
                      </div>
                    </div>
                    <div class="mb-3">
-                     <label for="multipleAnalysisName" class="form-label">分析檔案名稱：</label>
-                     <input type="text" class="form-control" id="multipleAnalysisName" name="analysis_name" required 
-                            placeholder="例如：合併分析_2024-01-15">
-                     <div class="form-text">批量檔案將合併為一個分析</div>
+                     <label for="multipleAnalysisName" class="form-label">分析檔案名稱 <small class="text-muted">(選填)</small>：</label>
+                     <input type="text" class="form-control" id="multipleAnalysisName" name="analysis_name" 
+                            placeholder="例如：合併分析_2024-01-15 (留空則自動命名)">
+                     <div class="form-text">批量檔案將合併為一個分析，留空則自動命名</div>
                    </div>
                    
                    <!-- 檔案預覽 -->
@@ -864,6 +870,20 @@
     }
 
     $(document).ready(function () {
+      // 檢查並載入當前分析檔案名稱
+      if (!$('#currentAnalysisName').text().trim() || $('#currentAnalysisName').text().trim() === '{{ current_analysis }}') {
+        $.ajax({
+          url: '/api/current_analysis_info',
+          method: 'GET',
+          success: function(response) {
+            $('#currentAnalysisName').text(response);
+          },
+          error: function() {
+            $('#currentAnalysisName').text('載入失敗');
+          }
+        });
+      }
+
       // 初始化 Select2
       $('#typeFilter').select2({
         placeholder: "選擇一或多種類型",
@@ -1628,10 +1648,11 @@
              return;
            }
            
-           if (!analysisName) {
-             alert('請輸入分析檔案名稱');
-             return;
-           }
+           // 移除名稱必填驗證，允許留空自動命名
+           // if (!analysisName) {
+           //   alert('請輸入分析檔案名稱');
+           //   return;
+           // }
            
            const formData = new FormData();
            
@@ -1639,7 +1660,8 @@
            for (let i = 0; i < files.length; i++) {
              formData.append('files', files[i]);
            }
-           formData.append('analysis_name', analysisName);
+           // 如果名稱為空，傳遞空字串讓後端自動命名
+           formData.append('analysis_name', analysisName || '');
            
            $('#uploadProgress').removeClass('d-none');
            $('#uploadStatusText').text(`正在上傳並合併分析 ${files.length} 個檔案，請稍候...`);

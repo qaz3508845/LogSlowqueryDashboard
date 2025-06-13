@@ -1,0 +1,103 @@
+<!-- 樣板統計頁面 -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="summaryFilter()">
+    <!-- 頁面標題 -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">SQL 樣板統計</h2>
+        <p class="mt-2 text-gray-600">分析和查看您的 SQL 查詢樣板統計資訊</p>
+    </div>
+
+    <!-- 篩選控制區域 -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-filter mr-2 text-blue-600"></i>
+                篩選條件
+            </h3>
+        </div>
+        
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- SQL 類型篩選 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">SQL 類型</label>
+                    <select x-model="filters.type" class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                        <option value="">全部類型</option>
+                        <option value="SELECT">SELECT</option>
+                        <option value="INSERT">INSERT</option>
+                        <option value="UPDATE">UPDATE</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="OTHER">OTHER</option>
+                    </select>
+                </div>
+                
+                <!-- 執行時間篩選 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">最小平均時間 (秒)</label>
+                    <input 
+                        x-model="filters.minTime" 
+                        type="number" 
+                        step="0.1" 
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="例如 0.5">
+                </div>
+                
+                <!-- 表格篩選 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">使用表格</label>
+                    <input 
+                        x-model="filters.table" 
+                        type="text" 
+                        class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        placeholder="輸入表格名稱">
+                </div>
+            </div>
+            
+            <!-- 樣板 SQL 篩選 -->
+            <div class="mt-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">樣板 SQL 關鍵字</label>
+                <input 
+                    x-model="filters.template" 
+                    type="text" 
+                    class="block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="搜尋 SQL 樣板內容關鍵字">
+            </div>
+        </div>
+    </div>
+
+    <!-- 統計表格 -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-table mr-2 text-blue-600"></i>
+                SQL 樣板統計表
+            </h3>
+        </div>
+        
+        <div id="summary-table" 
+             hx-get="/api/summary_data"
+             hx-trigger="load">
+            <!-- 載入中 -->
+            <div class="p-6">
+                <div class="animate-pulse space-y-4">
+                    <div class="h-4 bg-gray-200 rounded w-full"></div>
+                    <div class="h-4 bg-gray-200 rounded w-3/4"></div>
+                    <div class="h-4 bg-gray-200 rounded w-1/2"></div>
+                </div>
+                <p class="text-center text-gray-500 mt-4">載入中...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function summaryFilter() {
+    return {
+        filters: {
+            type: '',
+            minTime: '',
+            table: '',
+            template: ''
+        }
+    }
+}
+</script> 

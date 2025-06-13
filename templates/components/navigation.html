@@ -1,0 +1,65 @@
+<!-- 導航標籤 -->
+<div class="bg-white border-b border-gray-200" x-data="{ activeTab: 'summary' }">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <nav class="flex space-x-8" aria-label="Tabs">
+            <!-- 樣板統計 -->
+            <button 
+                @click="activeTab = 'summary'"
+                :class="activeTab === 'summary' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                hx-get="/components/summary"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#loading-indicator">
+                <i class="fas fa-table mr-2"></i>
+                樣板統計
+            </button>
+            
+            <!-- 原始查詢列表 -->
+            <button 
+                @click="activeTab = 'queries'"
+                :class="activeTab === 'queries' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                hx-get="/components/queries"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#loading-indicator">
+                <i class="fas fa-list mr-2"></i>
+                原始查詢列表
+            </button>
+            
+            <!-- 效能分析 -->
+            <button 
+                @click="activeTab = 'analysis'"
+                :class="activeTab === 'analysis' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                hx-get="/components/analysis"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#loading-indicator">
+                <i class="fas fa-chart-bar mr-2"></i>
+                效能分析
+            </button>
+            
+            <!-- 檔案管理 -->
+            <button 
+                @click="activeTab = 'manage'"
+                :class="activeTab === 'manage' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors"
+                hx-get="/components/manage"
+                hx-target="#main-content"
+                hx-swap="innerHTML"
+                hx-indicator="#loading-indicator">
+                <i class="fas fa-cog mr-2"></i>
+                檔案管理
+            </button>
+        </nav>
+    </div>
+</div>
+
+<!-- 載入指示器 -->
+<div id="loading-indicator" class="htmx-indicator">
+    <div class="fixed top-0 left-0 w-full h-1 bg-blue-600 z-50">
+        <div class="h-full bg-blue-800 animate-pulse"></div>
+    </div>
+</div> 

@@ -1,0 +1,24 @@
+<!-- 頁面標題和狀態 -->
+<div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div class="flex justify-between items-center">
+            <!-- 左側：標題和當前分析 -->
+            <div>
+                <h1 class="text-3xl font-bold flex items-center">
+                    <i class="fas fa-chart-line mr-3"></i>
+                    SQL 慢查詢分析 Dashboard
+                </h1>
+                <!-- 當前分析檔案 -->
+                <div class="mt-2 flex items-center space-x-4">
+                    <span class="text-sm text-blue-100 font-medium">當前分析檔案：</span>
+                    <span id="current-analysis-name" 
+                          hx-get="/api/current_analysis_info"
+                          hx-trigger="load"
+                          class="text-sm font-semibold bg-blue-400 bg-opacity-30 px-3 py-1 rounded-full">
+                        載入中...
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> 
