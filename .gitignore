@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 專案特定檔案
+# 原始 LOG 檔案（通常很大且包含敏感資料）
+*.log
+*.log-*
+
+# 解析後的 JSON 檔案（可重新生成）
+parsed_slow_log.json
+normalized_sql_summary.json
+
+# 用戶上傳的分析資料目錄
+analysis_data/
+
+# 臨時檔案
+*.tmp
+*.temp
+
+# 備份檔案
+*.bak
+*.backup
+
+# 測試檔案
+test_*.py
+*_test.py 

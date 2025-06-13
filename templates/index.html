@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQL 慢查詢分析 Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    .sql-template {
+      font-family: 'Courier New', monospace;
+      font-size: 0.9em;
+      max-width: 400px;
+      word-break: break-word;
+    }
+    .expandable-row {
+      background-color: #f8f9fa;
+      border-left: 4px solid #007bff;
+    }
+    .raw-sql-item {
+      background: #fff;
+      border: 1px solid #dee2e6;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      padding: 15px;
+    }
+    .raw-sql-content {
+      font-family: 'Courier New', monospace;
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 3px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .expand-btn {
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .expand-btn.expanded {
+      transform: rotate(90deg);
+    }
+    .metric-badge {
+      font-size: 0.8em;
+    }
+    .loading-spinner {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-light">
+  <div class="container-fluid mt-4">
+    <div class="row">
+      <div class="col-12">
+        <h1 class="mb-4"><i class="fas fa-chart-line me-2"></i>SQL 慢查詢分析 Dashboard</h1>
+      </div>
+    </div>
+
+    <!-- 當前分析檔案資訊 -->
+    <div class="row mb-3">
+      <div class="col-md-8">
+        <div class="alert alert-info d-flex align-items-center">
+          <i class="fas fa-info-circle me-2"></i>
+          <span>當前分析檔案：<strong id="currentAnalysisName">{{ current_analysis }}</strong></span>
+          <button class="btn btn-outline-primary btn-sm ms-3" id="switchAnalysisBtn">
+            <i class="fas fa-exchange-alt me-1"></i>切換分析檔案
+          </button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <button class="btn btn-success me-2" id="uploadLogBtn">
+          <i class="fas fa-upload me-1"></i>上傳新的 LOG 檔案
+        </button>
+        <button class="btn btn-info" id="mergeAnalysisBtn">
+          <i class="fas fa-layer-group me-1"></i>合併分析檔案
+        </button>
+      </div>
+    </div>
+
+    <!-- 分頁導航 -->
+    <ul class="nav nav-tabs mb-3" id="sqlTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="summary-tab" data-bs-toggle="tab" data-bs-target="#summary" type="button" role="tab">
+          <i class="fas fa-table me-1"></i>樣板統計
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="details-tab" data-bs-toggle="tab" data-bs-target="#details" type="button" role="tab">
+          <i class="fas fa-list me-1"></i>原始查詢列表
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="analysis-tab" data-bs-toggle="tab" data-bs-target="#analysis" type="button" role="tab">
+          <i class="fas fa-chart-bar me-1"></i>效能分析
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="manage-tab" data-bs-toggle="tab" data-bs-target="#manage" type="button" role="tab">
+          <i class="fas fa-cog me-1"></i>檔案管理
+        </button>
+      </li>
+    </ul>
+
+    <!-- 分頁內容 -->
+    <div class="tab-content">
+      <!-- 樣板統計頁面 -->
+      <div class="tab-pane fade show active" id="summary" role="tabpanel">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">SQL 樣板統計表</h5>
+          </div>
+          <div class="card-body">
+                        <!-- 篩選控制 -->
+            <div class="row mb-3">
+              <div class="col-md-4">
+      <label for="typeFilter" class="form-label">篩選 SQL 類型：</label>
+      <select id="typeFilter" class="form-select" multiple>
+        <option value="SELECT">SELECT</option>
+        <option value="INSERT">INSERT</option>
+        <option value="UPDATE">UPDATE</option>
+        <option value="DELETE">DELETE</option>
+        <option value="REPLACE">REPLACE</option>
+        <option value="CALL">CALL</option>
+        <option value="OTHER">OTHER</option>
+      </select>
+              </div>
+              <div class="col-md-4">
+                <label for="timeFilter" class="form-label">篩選平均時間 ≥ X 秒：</label>
+                <input type="number" step="0.1" id="timeFilter" class="form-control" placeholder="例如 0.5">
+              </div>
+              <div class="col-md-4">
+                <label for="tableFilter" class="form-label">篩選使用表格：</label>
+                <input type="text" id="tableFilter" class="form-control" placeholder="輸入表格名稱">
+                <div class="form-text">支援部分匹配，多個表格用逗號分隔</div>
+              </div>
+    </div>
+    
+    <!-- 樣板篩選 -->
+    <div class="row mb-3">
+      <div class="col-md-12">
+        <label for="templateFilter" class="form-label">篩選樣板 SQL：</label>
+        <input type="text" id="templateFilter" class="form-control" placeholder="搜尋 SQL 樣板內容關鍵字">
+        <div class="form-text">搜尋 SQL 樣板中的關鍵字</div>
+      </div>
+    </div>
+
+            <!-- 統計表格 -->
+            <table id="summaryTable" class="table table-striped table-bordered">
+              <thead>
+                <tr>
+                  <th width="5%"></th>
+                  <th width="8%">類型</th>
+                  <th width="8%">次數</th>
+                  <th width="12%">平均執行時間 (s)</th>
+                  <th width="15%">使用表格</th>
+                  <th width="52%">樣板 SQL</th>
+                </tr>
+              </thead>
+                             <tbody>
+                 {% for row in data %}
+                                  <tr class="data-row" data-template-index="{{ loop.index0 }}" data-avg-time="{{ row.avg_query_time }}" data-type="{{ row.type }}" data-count="{{ row.count }}">
+                   <td class="text-center">
+                     <i class="fas fa-chevron-right expand-btn" title="展開原始 SQL"></i>
+                   </td>
+                   <td>
+                     <span class="badge bg-{% if row.type == 'SELECT' %}primary{% elif row.type == 'INSERT' %}success{% elif row.type == 'UPDATE' %}warning{% elif row.type == 'DELETE' %}danger{% else %}secondary{% endif %}">
+                       {{ row.type }}
+                     </span>
+                   </td>
+          <td>{{ row.count }}</td>
+                   <td>
+                     <span class="{% if row.avg_query_time > 10 %}text-danger fw-bold{% elif row.avg_query_time > 1 %}text-warning{% else %}text-success{% endif %}">
+                       {{ row.avg_query_time }}
+                     </span>
+                   </td>
+                   <td>
+                     {% if row.tables_used %}
+                       <small class="text-muted">{{ row.tables_used | join(', ') }}</small>
+                     {% else %}
+                       <small class="text-muted">-</small>
+                     {% endif %}
+                   </td>
+                   <td><code class="sql-template">{{ row.template }}</code></td>
+        </tr>
+                 {% endfor %}
+               </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 原始查詢列表頁面 -->
+      <div class="tab-pane fade" id="details" role="tabpanel">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="card-title mb-0">完整原始查詢記錄</h5>
+          </div>
+          <div class="card-body">
+            <!-- 篩選控制區 -->
+            <div class="row mb-3">
+              <div class="col-md-3">
+                <label for="detailsSearch" class="form-label">關鍵字搜尋：</label>
+                <input type="text" id="detailsSearch" class="form-control" placeholder="搜尋 SQL 內容">
+              </div>
+              <div class="col-md-2">
+                <label for="detailsMinTime" class="form-label">最小時間(s)：</label>
+                <input type="number" step="0.1" id="detailsMinTime" class="form-control" placeholder="0">
+              </div>
+              <div class="col-md-2">
+                <label for="detailsTypeFilter" class="form-label">SQL 類型：</label>
+                <select id="detailsTypeFilter" class="form-select">
+                  <option value="">全部</option>
+                  <option value="SELECT">SELECT</option>
+                  <option value="INSERT">INSERT</option>
+                  <option value="UPDATE">UPDATE</option>
+                  <option value="DELETE">DELETE</option>
+                  <option value="OTHER">OTHER</option>
+                </select>
+              </div>
+              <div class="col-md-2">
+                <label for="detailsUserFilter" class="form-label">用戶：</label>
+                <input type="text" id="detailsUserFilter" class="form-control" placeholder="用戶名稱">
+              </div>
+              <div class="col-md-3 d-flex align-items-end">
+                <button id="searchDetailsBtn" class="btn btn-primary me-2">
+                  <i class="fas fa-search me-1"></i>搜尋
+                </button>
+                <button id="resetDetailsBtn" class="btn btn-outline-secondary">
+                  <i class="fas fa-undo me-1"></i>重設
+                </button>
+              </div>
+            </div>
+            
+            <!-- 額外篩選控制區 -->
+            <div class="row mb-3">
+              <div class="col-md-4">
+                <label for="detailsTableFilter" class="form-label">表格篩選：</label>
+                <input type="text" id="detailsTableFilter" class="form-control" placeholder="輸入表格名稱">
+                <div class="form-text">支援部分匹配，多個表格用逗號分隔</div>
+              </div>
+              <div class="col-md-8">
+                <label class="form-label">快速篩選：</label>
+                <div class="d-flex flex-wrap gap-1">
+                  <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-type="time" data-value="10">
+                    > 10s
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-warning quick-filter" data-type="time" data-value="30">
+                    > 30s
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-danger quick-filter" data-type="time" data-value="60">
+                    > 1分鐘
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary quick-filter" data-type="rows" data-value="100000">
+                    檢查行數 > 10萬
+                  </button>
+                  <button type="button" class="btn btn-sm btn-outline-info quick-filter" data-type="rows" data-value="1000000">
+                    檢查行數 > 100萬
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 結果統計 -->
+            <div class="row mb-3">
+              <div class="col-12">
+                <div id="detailsStats" class="alert alert-info d-none">
+                  <i class="fas fa-info-circle me-2"></i>
+                  <span id="statsText"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 查詢列表表格 -->
+            <div class="table-responsive">
+              <table id="detailsTable" class="table table-striped table-bordered">
+                <thead>
+                  <tr>
+                    <th width="8%">類型</th>
+                    <th width="8%">查詢時間</th>
+                    <th width="8%">鎖定時間</th>
+                    <th width="8%">檢查行數</th>
+                    <th width="8%">回傳行數</th>
+                    <th width="10%">用戶@主機</th>
+                    <th width="10%">資料庫</th>
+                    <th width="8%">使用表格</th>
+                    <th width="32%">SQL 查詢</th>
+                  </tr>
+                </thead>
+                <tbody id="detailsTableBody">
+                  <!-- 數據將透過 AJAX 載入 -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 分頁控制 -->
+            <div class="d-flex justify-content-between align-items-center mt-3">
+              <div id="detailsPageInfo" class="text-muted">
+                顯示第 1-50 筆，共 0 筆記錄
+              </div>
+              <nav>
+                <ul class="pagination mb-0" id="detailsPagination">
+                  <!-- 分頁按鈕將動態生成 -->
+                </ul>
+              </nav>
+            </div>
+
+            <!-- 載入指示器 -->
+            <div id="detailsLoading" class="text-center p-4 d-none">
+              <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+              <p class="mt-2 text-muted">載入中...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 效能分析頁面 -->
+      <div class="tab-pane fade" id="analysis" role="tabpanel">
+        <!-- 基本統計卡片 -->
+        <div class="row mb-4">
+          <div class="col-md-3">
+            <div class="card bg-primary text-white">
+              <div class="card-body">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <h6 class="card-title">總查詢數</h6>
+                    <h3 id="totalQueries">-</h3>
+                  </div>
+                  <i class="fas fa-database fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card bg-success text-white">
+              <div class="card-body">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <h6 class="card-title">平均執行時間</h6>
+                    <h3 id="avgTime">-</h3>
+                  </div>
+                  <i class="fas fa-clock fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card bg-warning text-white">
+              <div class="card-body">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <h6 class="card-title">最大執行時間</h6>
+                    <h3 id="maxTime">-</h3>
+                  </div>
+                  <i class="fas fa-exclamation-triangle fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-3">
+            <div class="card bg-info text-white">
+              <div class="card-body">
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <h6 class="card-title">中位數時間</h6>
+                    <h3 id="medianTime">-</h3>
+                  </div>
+                  <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 圖表區域 -->
+        <div class="row">
+          <!-- SQL類型分布 -->
+          <div class="col-md-6 mb-4">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-pie-chart me-2"></i>SQL 類型分布</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="typeChart" height="300"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 執行時間分布 -->
+          <div class="col-md-6 mb-4">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-bar-chart me-2"></i>執行時間分布</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="timeRangeChart" height="300"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 用戶活動統計 -->
+          <div class="col-md-6 mb-4">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-users me-2"></i>用戶活動統計 (Top 10)</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="userChart" height="300"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 表格使用統計 -->
+          <div class="col-md-6 mb-4">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-table me-2"></i>熱門表格 (Top 10)</h6>
+              </div>
+              <div class="card-body">
+                <canvas id="tableChart" height="300"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- SQL類型效能對比 -->
+          <div class="col-12 mb-4">
+            <div class="card">
+              <div class="card-header">
+                <h6 class="card-title mb-0"><i class="fas fa-chart-bar me-2"></i>SQL 類型效能對比</h6>
+              </div>
+              <div class="card-body">
+                <div class="table-responsive">
+                  <table class="table table-striped">
+                    <thead>
+                      <tr>
+                        <th>SQL 類型</th>
+                        <th>查詢次數</th>
+                        <th>平均執行時間 (s)</th>
+                        <th>最大執行時間 (s)</th>
+                        <th>效能評級</th>
+                      </tr>
+                    </thead>
+                    <tbody id="typePerformanceTable">
+                      <!-- 數據將透過 AJAX 載入 -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+                 <!-- 載入指示器 -->
+         <div id="analysisLoading" class="text-center p-4">
+           <i class="fas fa-spinner fa-spin fa-2x text-primary"></i>
+           <p class="mt-2 text-muted">載入效能分析資料中...</p>
+         </div>
+       </div>
+
+       <!-- 檔案管理頁面 -->
+       <div class="tab-pane fade" id="manage" role="tabpanel">
+         <div class="row">
+           <!-- 檔案上傳區域 -->
+           <div class="col-md-6">
+             <div class="card">
+               <div class="card-header">
+                 <h6 class="card-title mb-0"><i class="fas fa-upload me-2"></i>上傳 LOG 檔案</h6>
+               </div>
+               <div class="card-body">
+                 <form id="uploadForm" enctype="multipart/form-data">
+                   <div class="mb-3">
+                     <label for="logFile" class="form-label">選擇 LOG 檔案：</label>
+                     <input type="file" class="form-control" id="logFile" name="file" accept=".log,.txt" required>
+                     <div class="form-text">支援 .log 和 .txt 格式</div>
+                   </div>
+                   <div class="mb-3">
+                     <label for="analysisName" class="form-label">分析檔案名稱：</label>
+                     <input type="text" class="form-control" id="analysisName" name="analysis_name" required 
+                            placeholder="例如：2024-01-15_production">
+                     <div class="form-text">請輸入易於識別的名稱</div>
+                   </div>
+                   <button type="submit" class="btn btn-primary" id="uploadSubmitBtn">
+                     <i class="fas fa-upload me-1"></i>上傳並分析
+                   </button>
+                 </form>
+               </div>
+             </div>
+           </div>
+
+           <!-- 檔案列表區域 -->
+           <div class="col-md-6">
+             <div class="card">
+               <div class="card-header d-flex justify-content-between align-items-center">
+                 <h6 class="card-title mb-0"><i class="fas fa-folder me-2"></i>分析檔案列表</h6>
+                 <button class="btn btn-outline-secondary btn-sm" id="refreshFilesBtn">
+                   <i class="fas fa-sync me-1"></i>重新整理
+                 </button>
+               </div>
+               <div class="card-body">
+                 <div id="filesList">
+                   <!-- 檔案列表將透過 AJAX 載入 -->
+                 </div>
+               </div>
+             </div>
+           </div>
+         </div>
+
+         <!-- 上傳進度 -->
+         <div id="uploadProgress" class="mt-3 d-none">
+           <div class="card">
+             <div class="card-body">
+               <h6><i class="fas fa-cog fa-spin me-2"></i>處理中...</h6>
+               <div class="progress">
+                 <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+               </div>
+               <small class="text-muted mt-2 d-block" id="uploadStatusText">正在上傳並分析 LOG 檔案，請稍候...</small>
+             </div>
+           </div>
+         </div>
+       </div>
+     </div>
+   </div>
+
+   <!-- 切換分析檔案 Modal -->
+   <div class="modal fade" id="switchAnalysisModal" tabindex="-1">
+     <div class="modal-dialog modal-lg">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>切換分析檔案</h5>
+           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+         </div>
+         <div class="modal-body">
+           <div id="analysisFilesList">
+             <!-- 分析檔案列表將透過 AJAX 載入 -->
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+         </div>
+       </div>
+     </div>
+   </div>
+
+      <!-- 上傳 Modal -->
+   <div class="modal fade" id="uploadModal" tabindex="-1">
+     <div class="modal-dialog">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title"><i class="fas fa-upload me-2"></i>上傳 LOG 檔案</h5>
+           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+         </div>
+         <div class="modal-body">
+           <form id="quickUploadForm" enctype="multipart/form-data">
+             <div class="mb-3">
+               <label for="quickLogFile" class="form-label">選擇 LOG 檔案：</label>
+               <input type="file" class="form-control" id="quickLogFile" name="file" accept=".log,.txt" required>
+             </div>
+             <div class="mb-3">
+               <label for="quickAnalysisName" class="form-label">分析檔案名稱：</label>
+               <input type="text" class="form-control" id="quickAnalysisName" name="analysis_name" required>
+             </div>
+           </form>
+         </div>
+         <div class="modal-footer">
+           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+           <button type="button" class="btn btn-primary" id="quickUploadBtn">
+             <i class="fas fa-upload me-1"></i>上傳並分析
+           </button>
+         </div>
+       </div>
+     </div>
+   </div>
+
+   <!-- 合併分析檔案 Modal -->
+   <div class="modal fade" id="mergeAnalysisModal" tabindex="-1">
+     <div class="modal-dialog modal-lg">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title"><i class="fas fa-layer-group me-2"></i>合併分析檔案</h5>
+           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+         </div>
+         <div class="modal-body">
+           <div class="mb-3">
+             <label for="mergedAnalysisName" class="form-label">新分析檔案名稱：</label>
+             <input type="text" class="form-control" id="mergedAnalysisName" required placeholder="例如：合併報告_2024-06-13">
+             <div class="form-text">輸入合併後的分析檔案名稱</div>
+           </div>
+           
+           <div class="mb-3">
+             <label class="form-label">選擇要合併的分析檔案：</label>
+             <div class="form-text mb-2">請選擇至少 2 個檔案進行合併</div>
+             <div id="mergeFilesList" class="border rounded p-3" style="max-height: 300px; overflow-y: auto;">
+               <!-- 可選擇的分析檔案列表 -->
+             </div>
+           </div>
+           
+           <div id="mergePreview" class="d-none">
+             <h6><i class="fas fa-eye me-2"></i>合併預覽</h6>
+             <div class="alert alert-info">
+               <div><strong>已選擇檔案：</strong><span id="selectedCount">0</span> 個</div>
+               <div><strong>預估總查詢數：</strong><span id="estimatedQueries">0</span> 筆</div>
+               <div><strong>預估總樣板數：</strong><span id="estimatedTemplates">約 ? 個</span></div>
+             </div>
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+           <button type="button" class="btn btn-primary" id="startMergeBtn" disabled>
+             <i class="fas fa-layer-group me-1"></i>開始合併
+           </button>
+         </div>
+       </div>
+     </div>
+   </div>
+
+   <!-- 合併進度 Modal -->
+   <div class="modal fade" id="mergeProgressModal" tabindex="-1" data-bs-backdrop="static">
+     <div class="modal-dialog">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title"><i class="fas fa-cog fa-spin me-2"></i>合併處理中</h5>
+         </div>
+         <div class="modal-body text-center">
+           <div class="mb-3">
+             <i class="fas fa-layer-group fa-3x text-primary mb-3"></i>
+             <h6>正在合併分析檔案...</h6>
+           </div>
+           <div class="progress mb-3">
+             <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+           </div>
+           <div id="mergeProgressText" class="text-muted">
+             正在處理檔案合併，請稍候...
+           </div>
+         </div>
+       </div>
+     </div>
+   </div>
+
+   <!-- SQL 詳細內容 Modal -->
+   <div class="modal fade" id="sqlDetailModal" tabindex="-1">
+     <div class="modal-dialog modal-xl">
+       <div class="modal-content">
+         <div class="modal-header">
+           <h5 class="modal-title"><i class="fas fa-code me-2"></i>SQL 查詢詳細內容</h5>
+           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+         </div>
+         <div class="modal-body">
+           <!-- SQL 基本資訊 -->
+           <div class="row mb-3">
+             <div class="col-md-2">
+               <strong>SQL 類型：</strong><br>
+               <span id="sqlDetailType" class="badge bg-primary">-</span>
+             </div>
+             <div class="col-md-2">
+               <strong>查詢時間：</strong><br>
+               <span id="sqlDetailQueryTime" class="text-danger">-</span>
+             </div>
+             <div class="col-md-2">
+               <strong>鎖定時間：</strong><br>
+               <span id="sqlDetailLockTime">-</span>
+             </div>
+             <div class="col-md-3">
+               <strong>用戶@主機：</strong><br>
+               <span id="sqlDetailUser">-</span>
+             </div>
+             <div class="col-md-3">
+               <strong>資料庫：</strong><br>
+               <span id="sqlDetailSchema">-</span>
+             </div>
+           </div>
+           
+           <div class="row mb-3">
+             <div class="col-md-3">
+               <strong>檢查行數：</strong><br>
+               <span id="sqlDetailRowsExamined">-</span>
+             </div>
+             <div class="col-md-3">
+               <strong>回傳行數：</strong><br>
+               <span id="sqlDetailRowsSent">-</span>
+             </div>
+             <div class="col-md-6">
+               <strong>使用表格：</strong><br>
+               <span id="sqlDetailTables">-</span>
+             </div>
+           </div>
+
+           <hr>
+
+           <!-- SQL 內容 -->
+           <div class="mb-3">
+             <div class="d-flex justify-content-between align-items-center mb-2">
+               <strong><i class="fas fa-database me-2"></i>SQL 查詢內容：</strong>
+               <button id="copySqlBtn" class="btn btn-sm btn-outline-secondary" title="複製 SQL">
+                 <i class="fas fa-copy me-1"></i>複製
+               </button>
+             </div>
+             <div id="sqlDetailContent" class="bg-light p-3 rounded" style="font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; overflow-x: auto; max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6;">
+               <!-- SQL 內容將在這裡顯示 -->
+             </div>
+           </div>
+
+           <!-- 執行時間詳細資訊 -->
+           <div id="sqlDetailTime" class="text-muted small">
+             <strong>執行時間：</strong><span id="sqlDetailExecuteTime">-</span>
+           </div>
+         </div>
+         <div class="modal-footer">
+           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+           <button type="button" class="btn btn-primary" id="copySqlBtn2">
+             <i class="fas fa-copy me-1"></i>複製 SQL
+           </button>
+         </div>
+       </div>
+     </div>
+   </div>
+
+  <!-- JS 套件 -->
+  <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/js/dataTables.bootstrap5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
+
+  <script>
+    // 全域函數定義 (供 onclick 使用)
+    function switchToAnalysis(analysisName) {
+      $.ajax({
+        url: `/api/switch_analysis/${encodeURIComponent(analysisName)}`,
+        method: 'POST',
+        success: function(response) {
+          if (response.success) {
+            $('#currentAnalysisName').text(analysisName);
+            // 重新載入頁面資料
+            window.location.reload();
+          }
+        },
+        error: function(xhr) {
+          alert(`切換失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
+        }
+      });
+    }
+
+    function showSqlDetail(item) {
+      // 設定 SQL 類型標籤
+      const typeClass = getSqlTypeBadgeClass(item.sql_type);
+      $('#sqlDetailType').removeClass().addClass(`badge bg-${typeClass}`).text(item.sql_type);
+      
+      // 設定查詢時間（顏色標示）
+      const timeClass = getTimeClass(item.query_time);
+      $('#sqlDetailQueryTime').removeClass().addClass(timeClass).text(item.query_time + 's');
+      
+      // 設定其他基本資訊
+      $('#sqlDetailLockTime').text(item.lock_time + 's');
+      $('#sqlDetailUser').text(item.user + '@' + item.host);
+      $('#sqlDetailSchema').text(item.schema || '-');
+      $('#sqlDetailRowsExamined').text(item.rows_examined.toLocaleString());
+      $('#sqlDetailRowsSent').text(item.rows_sent.toLocaleString());
+      
+      // 設定使用表格
+      const tablesText = item.tables_used && item.tables_used.length > 0 
+        ? item.tables_used.join(', ') 
+        : '無明確表格';
+      $('#sqlDetailTables').text(tablesText);
+      
+      // 設定 SQL 內容
+      $('#sqlDetailContent').text(item.sql);
+      
+      // 設定執行時間
+      $('#sqlDetailExecuteTime').text(item.time || '未知');
+      
+      // 顯示 Modal
+      $('#sqlDetailModal').modal('show');
+    }
+
+    function getSqlTypeBadgeClass(type) {
+      const classes = {
+        'SELECT': 'primary',
+        'INSERT': 'success', 
+        'UPDATE': 'warning',
+        'DELETE': 'danger',
+        'OTHER': 'secondary'
+      };
+      return classes[type] || 'secondary';
+    }
+
+    function getTimeClass(time) {
+      if (time > 10) return 'text-danger fw-bold';
+      if (time > 1) return 'text-warning';
+      return 'text-success';
+    }
+
+    function deleteAnalysis(analysisName) {
+      if (confirm(`確定要刪除分析檔案 "${analysisName}" 嗎？此操作無法復原。`)) {
+        $.ajax({
+          url: `/api/analysis_files/${encodeURIComponent(analysisName)}`,
+          method: 'DELETE',
+          success: function(response) {
+            if (response.success) {
+              loadFilesList();
+              if (response.current_analysis !== analysisName) {
+                $('#currentAnalysisName').text(response.current_analysis);
+              } else {
+                window.location.reload();
+              }
+            }
+          },
+          error: function(xhr) {
+            alert(`刪除失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
+          }
+        });
+      }
+    }
+
+    function switchToAnalysisFromModal(analysisName) {
+      switchToAnalysis(analysisName);
+      $('#switchAnalysisModal').modal('hide');
+    }
+
+    $(document).ready(function () {
+      // 初始化 Select2
+      $('#typeFilter').select2({
+        placeholder: "選擇一或多種類型",
+        width: '100%',
+        allowClear: true
+      });
+
+      // 自定義篩選函數
+      $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+        if (settings.nTable.id !== 'summaryTable') return true;
+        
+        const typeSelected = $('#typeFilter').val();
+        const rowType = data[1].replace(/<[^>]*>/g, '').trim(); // 移除HTML標籤
+        const rowAvgTime = parseFloat(data[3].replace(/<[^>]*>/g, '').trim()) || 0;
+        const minTime = parseFloat($('#timeFilter').val()) || 0;
+        const tableFilter = $('#tableFilter').val().toLowerCase().trim();
+        const templateFilter = $('#templateFilter').val().toLowerCase().trim();
+        
+        // 篩選類型
+        if (typeSelected && typeSelected.length > 0 && !typeSelected.includes(rowType)) {
+          return false;
+        }
+
+        // 篩選平均時間
+        if (rowAvgTime < minTime) {
+          return false;
+        }
+        
+        // 篩選使用表格
+        if (tableFilter) {
+          const rowTables = data[4] ? data[4].toLowerCase() : ''; // 使用表格欄位
+          const filterTables = tableFilter.split(',').map(t => t.trim());
+          let found = false;
+          for (let filterTable of filterTables) {
+            if (filterTable && rowTables.includes(filterTable)) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            return false;
+          }
+        }
+        
+        // 篩選樣板 SQL
+        if (templateFilter) {
+          const rowTemplate = data[5] ? data[5].toLowerCase() : ''; // 樣板 SQL 欄位
+          if (!rowTemplate.includes(templateFilter)) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+
+      // 初始化 DataTable
+      const table = $('#summaryTable').DataTable({
+        "pageLength": 20,
+        "order": [[3, "desc"]], // 依平均執行時間降序
+        "columnDefs": [
+          { "orderable": false, "targets": [0] }, // 展開按鈕欄位不可排序
+          { "searchable": false, "targets": [0] }
+        ],
+        "language": {
+          "url": "https://cdn.datatables.net/plug-ins/1.13.4/i18n/zh-HANT.json"
+        },
+        "createdRow": function(row, data, dataIndex) {
+          // 為數據行添加標識，避免展開行被 DataTables 處理
+          $(row).addClass('data-row');
+        },
+        "drawCallback": function() {
+          // 每次重繪表格後，清除所有展開狀態
+          $('.expand-btn').removeClass('expanded');
+          $('.expandable-row').remove();
+        }
+      });
+
+      // 當篩選條件改變時重新篩選
+      $('#typeFilter, #timeFilter, #tableFilter, #templateFilter').on('change keyup', function () {
+        table.draw();
+      });
+
+             // 展開/收合原始 SQL 功能
+       $('#summaryTable tbody').on('click', '.expand-btn', function () {
+         const $btn = $(this);
+         const $row = $btn.closest('tr');
+         const templateIndex = $row.data('template-index');
+         const count = $row.data('count');
+         let $expandableRow = $row.next('.expandable-row');
+
+         if ($expandableRow.length === 0) {
+           // 創建展開行
+           const expandableRowHtml = `
+             <tr class="expandable-row">
+               <td colspan="6">
+                 <div class="p-3">
+                   <div class="d-flex justify-content-between align-items-center mb-3">
+                     <h6><i class="fas fa-code me-2"></i>原始 SQL 查詢 (共 ${count} 筆)</h6>
+                     <div class="loading-spinner">
+                       <i class="fas fa-spinner fa-spin"></i> 載入中...
+                     </div>
+                   </div>
+                   <div id="raw-sql-container-${templateIndex}" class="raw-sql-container" style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 5px;">
+                     <!-- 原始 SQL 內容將透過 AJAX 載入 -->
+                   </div>
+                 </div>
+               </td>
+             </tr>
+           `;
+           $row.after(expandableRowHtml);
+           $expandableRow = $row.next('.expandable-row');
+           
+           // 展開
+           $btn.addClass('expanded');
+           
+           const $container = $('#raw-sql-container-' + templateIndex);
+           const $spinner = $expandableRow.find('.loading-spinner');
+           
+           // 載入原始 SQL
+           $spinner.show();
+           
+           $.ajax({
+             url: `/api/raw_sqls/${templateIndex}`,
+             method: 'GET',
+             success: function(response) {
+               $spinner.hide();
+               if (response.raw_sqls && response.raw_sqls.length > 0) {
+                 let html = '';
+                 response.raw_sqls.forEach((sql, index) => {
+                   html += `
+                     <div class="raw-sql-item">
+                       <div class="row mb-2">
+                         <div class="col-md-3">
+                           <span class="badge bg-info metric-badge">查詢時間: ${sql.query_time}s</span>
+                         </div>
+                         <div class="col-md-3">
+                           <span class="badge bg-secondary metric-badge">檢查行數: ${sql.rows_examined}</span>
+                         </div>
+                         <div class="col-md-3">
+                           <span class="badge bg-primary metric-badge">回傳行數: ${sql.rows_sent}</span>
+                         </div>
+                         <div class="col-md-3">
+                           <small class="text-muted">用戶: ${sql.user}@${sql.host}</small>
+                         </div>
+                       </div>
+                       <div class="raw-sql-content">${sql.original_sql}</div>
+                       ${sql.time ? `<small class="text-muted">時間: ${sql.time}</small>` : ''}
+                     </div>
+                   `;
+                 });
+                 $container.html(html);
+               } else {
+                 $container.html('<div class="alert alert-warning">無可用的原始 SQL 資料</div>');
+               }
+             },
+             error: function() {
+               $spinner.hide();
+               $container.html('<div class="alert alert-danger">載入原始 SQL 失敗</div>');
+             }
+           });
+         } else {
+           // 切換展開/收合
+           if ($btn.hasClass('expanded')) {
+             // 收合
+             $btn.removeClass('expanded');
+             $expandableRow.remove();
+           } else {
+             // 展開
+             $btn.addClass('expanded');
+             $expandableRow.show();
+           }
+         }
+       });
+
+             // 分頁切換統計
+       $('#sqlTabs button[data-bs-toggle="tab"]').on('shown.bs.tab', function (e) {
+         const target = $(e.target).attr('data-bs-target');
+         console.log('切換到分頁:', target);
+         
+         // 如果切換到統計頁面，重新調整表格
+         if (target === '#summary') {
+           setTimeout(() => {
+             table.columns.adjust();
+           }, 100);
+         }
+         // 如果切換到原始查詢頁面，初始化並載入資料
+         else if (target === '#details') {
+           console.log('切換到原始查詢列表頁面'); // 除錯用
+           if (!detailsTable) {
+             console.log('初始化 DataTables'); // 除錯用
+             initDetailsTable();
+           }
+           console.log('載入資料'); // 除錯用
+           loadDetailsData();
+         }
+         // 如果切換到效能分析頁面，載入圖表
+         else if (target === '#analysis') {
+           loadAnalysisData();
+         }
+         // 如果切換到檔案管理頁面，載入檔案列表
+         else if (target === '#manage') {
+           window.loadFilesList();
+         }
+       });
+
+       // 原始查詢列表功能
+       let detailsTable;
+
+              function initDetailsTable() {
+         // 檢查是否已經初始化
+         if ($.fn.DataTable.isDataTable('#detailsTable')) {
+           $('#detailsTable').DataTable().destroy();
+         }
+         
+         // 初始化 DataTables
+         detailsTable = $('#detailsTable').DataTable({
+           "processing": true,
+           "serverSide": false,
+           "pageLength": 50,
+           "order": [[1, "desc"]], // 依查詢時間降序
+           "columnDefs": [
+             { "orderable": false, "targets": [8] }, // SQL 查詢欄位不可排序
+             { "type": "num", "targets": [1, 2, 3, 4] }, // 數字欄位
+             { "searchable": false, "targets": [0, 5, 6, 7] } // 部分欄位不參與搜尋
+           ],
+           "language": {
+             "lengthMenu": "顯示 _MENU_ 筆記錄",
+             "zeroRecords": "目前沒有資料",
+             "info": "顯示第 _START_ 到 _END_ 筆記錄，共 _TOTAL_ 筆",
+             "infoEmpty": "沒有記錄",
+             "infoFiltered": "(從 _MAX_ 筆記錄中篩選)",
+             "search": "搜尋:",
+             "paginate": {
+               "first": "第一頁",
+               "last": "最後一頁", 
+               "next": "下一頁",
+               "previous": "上一頁"
+             }
+           },
+           "data": [],
+           "columns": [
+             { "data": "sql_type", "render": function(data) {
+               const classes = {
+                 'SELECT': 'primary',
+                 'INSERT': 'success', 
+                 'UPDATE': 'warning',
+                 'DELETE': 'danger',
+                 'OTHER': 'secondary'
+               };
+               const badgeClass = classes[data] || 'secondary';
+               return `<span class="badge bg-${badgeClass}">${data}</span>`;
+             }},
+             { "data": "query_time", "render": function(data) {
+               let timeClass = 'text-success';
+               if (data > 10) timeClass = 'text-danger fw-bold';
+               else if (data > 1) timeClass = 'text-warning';
+               return `<span class="${timeClass}">${data}s</span>`;
+             }},
+             { "data": "lock_time", "render": function(data) { return data + 's'; }},
+             { "data": "rows_examined", "render": function(data) { return data.toLocaleString(); }},
+             { "data": "rows_sent", "render": function(data) { return data.toLocaleString(); }},
+             { "data": null, "render": function(data) { 
+               return `<small>${data.user}@${data.host}</small>`;
+             }},
+             { "data": "schema", "render": function(data) { return `<small>${data || '-'}</small>`; }},
+             { "data": "tables_used", "render": function(data) {
+               const tablesText = data && data.length > 0 ? data.join(', ') : '-';
+               return `<small style="max-width: 150px; overflow: visible; white-space: normal; word-wrap: break-word;">${tablesText}</small>`;
+             }},
+             { "data": null, "render": function(data) {
+               const sqlPreview = data.sql.substring(0, 100) + (data.sql.length > 100 ? '...' : '');
+               const icon = data.sql.length > 100 ? '<i class="fas fa-external-link-alt ms-1 text-primary"></i>' : '';
+               const escapedData = JSON.stringify(data).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+               return `<code class="sql-template sql-clickable" style="cursor: pointer; color: #0066cc;" 
+                             onclick="showSqlDetail(${escapedData})" 
+                             title="點擊查看完整 SQL">
+                         ${sqlPreview}${icon}
+                       </code>`;
+             }}
+           ]
+         });
+       }
+
+       function loadDetailsData() {
+         const search = $('#detailsSearch').val() || '';
+         const minTime = $('#detailsMinTime').val() || '0';
+         const sqlType = $('#detailsTypeFilter').val() || '';
+         const userFilter = $('#detailsUserFilter').val() || '';
+         const tableFilter = $('#detailsTableFilter').val() || '';
+
+         $('#detailsLoading').removeClass('d-none');
+
+         // 構建請求參數，排除空值
+         const params = {
+           page: 1,
+           size: 1000 // API 限制最大 1000 筆
+         };
+         
+         if (search) params.search = search;
+         if (minTime && minTime !== '0') params.min_time = minTime;
+         if (sqlType) params.sql_type = sqlType;
+         if (userFilter) params.user_filter = userFilter;
+         if (tableFilter) params.table_filter = tableFilter;
+
+         // 載入所有資料的函數
+         function loadAllPages(allData = [], currentPage = 1) {
+           const currentParams = { ...params, page: currentPage };
+           
+           $.ajax({
+             url: '/api/raw_queries',
+             method: 'GET',
+             data: currentParams,
+             success: function(response) {
+               console.log(`載入第 ${currentPage} 頁，收到 ${response.data.length} 筆資料`);
+               
+               // 合併資料
+               allData = allData.concat(response.data || []);
+               
+               // 檢查是否還有更多頁面
+               if (response.data && response.data.length === 1000 && currentPage < response.total_pages) {
+                 // 還有更多頁面，繼續載入
+                 loadAllPages(allData, currentPage + 1);
+               } else {
+                 // 載入完成
+                 $('#detailsLoading').addClass('d-none');
+                 console.log('總共載入', allData.length, '筆資料');
+                 
+                 if (allData.length > 0) {
+                   // 清空並重新載入資料
+                   detailsTable.clear();
+                   detailsTable.rows.add(allData);
+                   detailsTable.draw();
+                   
+                   // 顯示統計
+                   $('#detailsStats').removeClass('d-none');
+                   $('#statsText').text(`找到 ${response.total || allData.length} 筆記錄`);
+                   
+                   // 隱藏自定義分頁控制
+                   $('#detailsPagination, #detailsPageInfo').hide();
+                 } else {
+                   console.log('沒有收到資料');
+                   detailsTable.clear().draw();
+                   $('#detailsStats').addClass('d-none');
+                   $('#detailsPagination, #detailsPageInfo').hide();
+                 }
+               }
+             },
+             error: function(xhr) {
+               $('#detailsLoading').addClass('d-none');
+               console.log('載入失敗:', xhr.responseText);
+               detailsTable.clear().draw();
+               $('#detailsStats').addClass('d-none');
+             }
+           });
+         }
+         
+         // 開始載入第一頁
+         loadAllPages();
+       }
+
+
+
+       // 搜尋功能
+       $('#searchDetailsBtn').click(function() {
+         loadDetailsData();
+       });
+
+       $('#resetDetailsBtn').click(function() {
+         $('#detailsSearch').val('');
+         $('#detailsMinTime').val('');
+         $('#detailsTypeFilter').val('');
+         $('#detailsUserFilter').val('');
+         $('#detailsTableFilter').val('');
+         $('.quick-filter').removeClass('active');
+         loadDetailsData();
+       });
+
+       // 快速篩選按鈕
+       $('.quick-filter').click(function() {
+         const type = $(this).data('type');
+         const value = $(this).data('value');
+         
+         $(this).toggleClass('active');
+         
+         if (type === 'time') {
+           if ($(this).hasClass('active')) {
+             $('#detailsMinTime').val(value);
+           } else {
+             $('#detailsMinTime').val('');
+           }
+         }
+         
+         loadDetailsData();
+       });
+
+       // 效能分析功能
+       let analysisLoaded = false;
+
+       function loadAnalysisData() {
+         if (analysisLoaded) return;
+
+         $.ajax({
+           url: '/api/performance_stats',
+           method: 'GET',
+           success: function(data) {
+             $('#analysisLoading').hide();
+             analysisLoaded = true;
+
+             // 更新基本統計卡片
+             $('#totalQueries').text(data.basic_stats.total_queries.toLocaleString());
+             $('#avgTime').text(data.basic_stats.avg_query_time + 's');
+             $('#maxTime').text(data.basic_stats.max_query_time + 's');
+             $('#medianTime').text(data.basic_stats.median_query_time + 's');
+
+             // 創建圖表
+             createTypeChart(data.type_stats);
+             createTimeRangeChart(data.time_ranges);
+             createUserChart(data.user_stats);
+             createTableChart(data.table_stats);
+             updateTypePerformanceTable(data.type_performance);
+           },
+           error: function() {
+             $('#analysisLoading').html('<div class="alert alert-danger">載入效能分析資料失敗</div>');
+           }
+         });
+       }
+
+       // 創建SQL類型圓餅圖
+       function createTypeChart(typeStats) {
+         const ctx = document.getElementById('typeChart').getContext('2d');
+         new Chart(ctx, {
+           type: 'pie',
+           data: {
+             labels: Object.keys(typeStats),
+             datasets: [{
+               data: Object.values(typeStats),
+               backgroundColor: [
+                 '#007bff', '#28a745', '#ffc107', '#dc3545', '#6c757d', '#17a2b8'
+               ]
+             }]
+           },
+           options: {
+             responsive: true,
+             maintainAspectRatio: false,
+             plugins: {
+               legend: {
+                 position: 'bottom'
+               }
+             }
+           }
+         });
+       }
+
+       // 創建時間分布長條圖
+       function createTimeRangeChart(timeRanges) {
+         const ctx = document.getElementById('timeRangeChart').getContext('2d');
+         new Chart(ctx, {
+           type: 'bar',
+           data: {
+             labels: Object.keys(timeRanges),
+             datasets: [{
+               label: '查詢次數',
+               data: Object.values(timeRanges),
+               backgroundColor: 'rgba(54, 162, 235, 0.8)',
+               borderColor: 'rgba(54, 162, 235, 1)',
+               borderWidth: 1
+             }]
+           },
+           options: {
+             responsive: true,
+             maintainAspectRatio: false,
+             scales: {
+               y: {
+                 beginAtZero: true
+               }
+             }
+           }
+         });
+       }
+
+       // 創建用戶活動圖表
+       function createUserChart(userStats) {
+         const ctx = document.getElementById('userChart').getContext('2d');
+         new Chart(ctx, {
+           type: 'bar',
+           data: {
+             labels: Object.keys(userStats),
+             datasets: [{
+               label: '查詢次數',
+               data: Object.values(userStats),
+               backgroundColor: 'rgba(255, 99, 132, 0.8)',
+               borderColor: 'rgba(255, 99, 132, 1)',
+               borderWidth: 1
+             }]
+           },
+           options: {
+             indexAxis: 'y',
+             responsive: true,
+             maintainAspectRatio: false,
+             scales: {
+               x: {
+                 beginAtZero: true
+               }
+             }
+           }
+         });
+       }
+
+       // 創建表格使用圖表
+       function createTableChart(tableStats) {
+         const ctx = document.getElementById('tableChart').getContext('2d');
+         new Chart(ctx, {
+           type: 'bar',
+           data: {
+             labels: Object.keys(tableStats),
+             datasets: [{
+               label: '使用次數',
+               data: Object.values(tableStats),
+               backgroundColor: 'rgba(75, 192, 192, 0.8)',
+               borderColor: 'rgba(75, 192, 192, 1)',
+               borderWidth: 1
+             }]
+           },
+           options: {
+             responsive: true,
+             maintainAspectRatio: false,
+             scales: {
+               y: {
+                 beginAtZero: true
+               }
+             }
+           }
+         });
+       }
+
+       // 更新類型效能表格
+       function updateTypePerformanceTable(typePerformance) {
+         let html = '';
+         for (const [type, stats] of Object.entries(typePerformance)) {
+           const grade = getPerformanceGrade(stats.avg_time);
+           html += `
+             <tr>
+               <td><span class="badge bg-${getSqlTypeBadgeClass(type)}">${type}</span></td>
+               <td>${stats.count.toLocaleString()}</td>
+               <td><span class="${getTimeClass(stats.avg_time)}">${stats.avg_time}s</span></td>
+               <td><span class="${getTimeClass(stats.max_time)}">${stats.max_time}s</span></td>
+               <td><span class="badge bg-${grade.class}">${grade.text}</span></td>
+             </tr>
+           `;
+         }
+         $('#typePerformanceTable').html(html);
+       }
+
+       // 輔助函數
+       function getSqlTypeBadgeClass(type) {
+         const classes = {
+           'SELECT': 'primary',
+           'INSERT': 'success', 
+           'UPDATE': 'warning',
+           'DELETE': 'danger',
+           'OTHER': 'secondary'
+         };
+         return classes[type] || 'secondary';
+       }
+
+       function getTimeClass(time) {
+         if (time > 10) return 'text-danger fw-bold';
+         if (time > 1) return 'text-warning';
+         return 'text-success';
+       }
+
+                function getPerformanceGrade(avgTime) {
+           if (avgTime < 0.1) return { class: 'success', text: '優秀' };
+           if (avgTime < 1) return { class: 'info', text: '良好' };
+           if (avgTime < 5) return { class: 'warning', text: '普通' };
+           if (avgTime < 10) return { class: 'danger', text: '較差' };
+           return { class: 'dark', text: '極差' };
+         }
+
+         // 檔案管理功能 (全域函數)
+         window.loadFilesList = function() {
+           $.ajax({
+             url: '/api/analysis_files',
+             method: 'GET',
+             success: function(response) {
+               let html = '';
+               response.analysis_files.forEach(file => {
+                 const isCurrentClass = file.is_current ? 'border-primary bg-light' : '';
+                 const currentBadge = file.is_current ? '<span class="badge bg-primary ms-2">目前使用</span>' : '';
+                 
+                 html += `
+                   <div class="card mb-2 ${isCurrentClass}">
+                     <div class="card-body">
+                       <div class="d-flex justify-content-between align-items-start">
+                         <div>
+                           <h6 class="card-title">${file.name} ${currentBadge}</h6>
+                           <small class="text-muted">
+                             查詢數：${file.metadata.total_queries} | 
+                             樣板數：${file.metadata.total_templates}
+                             ${file.metadata.upload_time ? `<br>上傳時間：${new Date(file.metadata.upload_time).toLocaleString()}` : ''}
+                           </small>
+                         </div>
+                         <div class="btn-group btn-group-sm">
+                           ${!file.is_current ? `<button class="btn btn-outline-primary" onclick="switchToAnalysis('${file.name}')">
+                             <i class="fas fa-check me-1"></i>切換
+                           </button>` : ''}
+                           ${file.name !== '預設分析' ? `<button class="btn btn-outline-danger" onclick="deleteAnalysis('${file.name}')">
+                             <i class="fas fa-trash me-1"></i>刪除
+                           </button>` : ''}
+                         </div>
+                       </div>
+                     </div>
+                   </div>
+                 `;
+               });
+               $('#filesList').html(html);
+             },
+             error: function() {
+               $('#filesList').html('<div class="alert alert-danger">載入檔案列表失敗</div>');
+             }
+           });
+         }
+
+                    window.loadAnalysisFilesList = function() {
+           $.ajax({
+             url: '/api/analysis_files',
+             method: 'GET',
+             success: function(response) {
+               let html = '';
+               response.analysis_files.forEach(file => {
+                 const isCurrentClass = file.is_current ? 'border-primary bg-light' : '';
+                 const currentBadge = file.is_current ? '<span class="badge bg-primary ms-2">目前使用</span>' : '';
+                 
+                 html += `
+                   <div class="card mb-2 ${isCurrentClass}" style="cursor: ${file.is_current ? 'default' : 'pointer'}" 
+                        ${!file.is_current ? `onclick="switchToAnalysisFromModal('${file.name}')"` : ''}>
+                     <div class="card-body">
+                       <h6 class="card-title">${file.name} ${currentBadge}</h6>
+                       <small class="text-muted">
+                         查詢數：${file.metadata.total_queries} | 樣板數：${file.metadata.total_templates}
+                         ${file.metadata.upload_time ? `<br>上傳時間：${new Date(file.metadata.upload_time).toLocaleString()}` : ''}
+                       </small>
+                     </div>
+                   </div>
+                 `;
+               });
+               $('#analysisFilesList').html(html);
+             }
+           });
+         }
+
+         
+
+         // 檔案上傳功能
+         $('#uploadForm').on('submit', function(e) {
+           e.preventDefault();
+           uploadFile(this);
+         });
+
+         $('#quickUploadForm').on('submit', function(e) {
+           e.preventDefault();
+           uploadFile(this);
+           $('#uploadModal').modal('hide');
+         });
+
+         function uploadFile(form) {
+           const formData = new FormData(form);
+           
+           $('#uploadProgress').removeClass('d-none');
+           $('#uploadStatusText').text('正在上傳並分析 LOG 檔案，請稍候...');
+
+           $.ajax({
+             url: '/api/upload_log',
+             method: 'POST',
+             data: formData,
+             processData: false,
+             contentType: false,
+             success: function(response) {
+               $('#uploadProgress').addClass('d-none');
+               
+               if (response.success) {
+                 alert(`上傳成功！\n檔案：${response.analysis_name}\n查詢數：${response.total_queries}\n樣板數：${response.total_templates}`);
+                 
+                 // 清空表單
+                 $(form)[0].reset();
+                 
+                 // 重新載入檔案列表
+                 window.loadFilesList();
+               }
+             },
+             error: function(xhr) {
+               $('#uploadProgress').addClass('d-none');
+               alert(`上傳失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
+             }
+           });
+         }
+
+         // 合併分析檔案功能
+         let selectedMergeFiles = [];
+         
+         function loadMergeFilesList() {
+           $.ajax({
+             url: '/api/analysis_files',
+             method: 'GET',
+             success: function(response) {
+               let html = '';
+               response.analysis_files.forEach(file => {
+                 html += `
+                   <div class="form-check mb-2">
+                     <input class="form-check-input merge-file-checkbox" type="checkbox" 
+                            value="${file.name}" id="merge_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}"
+                            data-queries="${file.metadata.total_queries}" 
+                            data-templates="${file.metadata.total_templates}">
+                     <label class="form-check-label w-100" for="merge_${file.name.replace(/[^a-zA-Z0-9]/g, '_')}">
+                       <div class="d-flex justify-content-between">
+                         <strong>${file.name}</strong>
+                         <small class="text-muted">
+                           查詢數：${file.metadata.total_queries} | 樣板數：${file.metadata.total_templates}
+                         </small>
+                       </div>
+                       ${file.metadata.upload_time && file.metadata.upload_time !== '內建資料' ? 
+                         `<small class="text-muted">上傳時間：${new Date(file.metadata.upload_time).toLocaleString()}</small>` : ''}
+                     </label>
+                   </div>
+                 `;
+               });
+               $('#mergeFilesList').html(html);
+               
+               // 綁定變更事件
+               $('.merge-file-checkbox').on('change', updateMergePreview);
+             },
+             error: function() {
+               $('#mergeFilesList').html('<div class="alert alert-danger">載入檔案列表失敗</div>');
+             }
+           });
+         }
+         
+         function updateMergePreview() {
+           selectedMergeFiles = [];
+           let totalQueries = 0;
+           
+           $('.merge-file-checkbox:checked').each(function() {
+             const fileName = $(this).val();
+             const queries = parseInt($(this).data('queries')) || 0;
+             const templates = parseInt($(this).data('templates')) || 0;
+             
+             selectedMergeFiles.push({
+               name: fileName,
+               queries: queries,
+               templates: templates
+             });
+             
+             totalQueries += queries;
+           });
+           
+           if (selectedMergeFiles.length >= 2) {
+             $('#mergePreview').removeClass('d-none');
+             $('#selectedCount').text(selectedMergeFiles.length);
+             $('#estimatedQueries').text(totalQueries.toLocaleString());
+             $('#estimatedTemplates').text(`約 ${Math.floor(totalQueries * 0.3)} 個`);
+             $('#startMergeBtn').prop('disabled', false);
+           } else {
+             $('#mergePreview').addClass('d-none');
+             $('#startMergeBtn').prop('disabled', true);
+           }
+         }
+         
+         function performMerge() {
+           const mergedName = $('#mergedAnalysisName').val().trim();
+           
+           if (!mergedName) {
+             alert('請輸入合併檔案名稱');
+             return;
+           }
+           
+           if (selectedMergeFiles.length < 2) {
+             alert('請至少選擇 2 個檔案進行合併');
+             return;
+           }
+           
+           // 顯示進度 Modal
+           $('#mergeAnalysisModal').modal('hide');
+           $('#mergeProgressModal').modal('show');
+           $('#mergeProgressText').text(`正在合併 ${selectedMergeFiles.length} 個分析檔案...`);
+           
+           $.ajax({
+             url: '/api/merge_analysis',
+             method: 'POST',
+             contentType: 'application/json',
+             data: JSON.stringify({
+               merged_name: mergedName,
+               source_files: selectedMergeFiles.map(f => f.name)
+             }),
+             success: function(response) {
+               $('#mergeProgressModal').modal('hide');
+               
+               if (response.success) {
+                 alert(`合併成功！\n檔案名稱：${response.merged_name}\n總查詢數：${response.total_queries}\n總樣板數：${response.total_templates}\n來源檔案：${response.source_count} 個`);
+                 
+                 // 重新載入檔案列表
+                 window.loadFilesList();
+                 
+                 // 清空表單
+                 $('#mergedAnalysisName').val('');
+                 $('.merge-file-checkbox').prop('checked', false);
+                 selectedMergeFiles = [];
+                 updateMergePreview();
+               }
+             },
+             error: function(xhr) {
+               $('#mergeProgressModal').modal('hide');
+               alert(`合併失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
+             }
+           });
+         }
+
+         // 按鈕事件
+         $('#uploadLogBtn').click(function() {
+           $('#uploadModal').modal('show');
+         });
+
+         $('#quickUploadBtn').click(function() {
+           $('#quickUploadForm').submit();
+         });
+
+         $('#switchAnalysisBtn').click(function() {
+           window.loadAnalysisFilesList();
+           $('#switchAnalysisModal').modal('show');
+         });
+
+         $('#mergeAnalysisBtn').click(function() {
+           loadMergeFilesList();
+           // 生成預設名稱
+           const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+           $('#mergedAnalysisName').val(`合併報告_${timestamp}`);
+           $('#mergeAnalysisModal').modal('show');
+         });
+
+         $('#startMergeBtn').click(function() {
+           performMerge();
+         });
+
+         $('#refreshFilesBtn').click(function() {
+           window.loadFilesList();
+         });
+
+                  // 複製 SQL 功能
+         $(document).on('click', '#copySqlBtn, #copySqlBtn2', function() {
+           const sqlContent = $('#sqlDetailContent').text();
+           const $btn = $(this);
+           
+           if (navigator.clipboard) {
+             navigator.clipboard.writeText(sqlContent).then(function() {
+               // 暫時變更按鈕文字顯示成功
+               const originalText = $btn.html();
+               $btn.html('<i class="fas fa-check me-1"></i>已複製');
+               setTimeout(() => {
+                 $btn.html(originalText);
+               }, 2000);
+             }).catch(function() {
+               alert('複製失敗，請手動選擇複製');
+             });
+           } else {
+             // 降級方案：選擇文字
+             const sqlElement = document.getElementById('sqlDetailContent');
+             if (window.getSelection && document.createRange) {
+               const selection = window.getSelection();
+               const range = document.createRange();
+               range.selectNodeContents(sqlElement);
+               selection.removeAllRanges();
+               selection.addRange(range);
+               alert('SQL 已選擇，請按 Ctrl+C 複製');
+             } else {
+               alert('瀏覽器不支援自動複製，請手動選擇複製');
+             }
+           }
+         });
+
+                  // 自動填入分析名稱
+         $('#logFile, #quickLogFile').change(function() {
+           const file = this.files[0];
+           if (file) {
+             const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+             const filename = file.name.replace(/\.(log|txt)$/, '');
+             const suggestedName = `${filename}_${timestamp}`;
+             
+             if (this.id === 'logFile') {
+               $('#analysisName').val(suggestedName);
+             } else {
+               $('#quickAnalysisName').val(suggestedName);
+             }
+           }
+         });
+
+         // 頁面載入完成後，檢查是否需要初始化原始查詢列表
+         // 注意：預設是樣板統計頁面，只有在用戶切換到原始查詢列表時才初始化
+       });
+     </script>
+</body>
+</html>
