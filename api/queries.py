@@ -118,4 +118,18 @@ def create_query_routes(data_manager: DataManager):
         stats = analyzer.calculate_performance_stats(data_manager.current_analysis.raw_data)
         return stats
     
+    @router.get("/tables_list")
+    async def get_tables_list():
+        """取得所有使用的表格列表"""
+        tables_set = set()
+        
+        # 從原始資料中收集所有表格
+        for item in data_manager.current_analysis.raw_data:
+            if hasattr(item, 'tables_used') and item.tables_used:
+                tables_set.update(item.tables_used)
+        
+        # 排序並返回
+        tables_list = sorted(list(tables_set))
+        return {"tables": tables_list}
+    
     return router 

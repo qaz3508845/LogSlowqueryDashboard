@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SQL 慢查詢分析 Dashboard</title>
+  <title>Log SQL 慢查詢分析 Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css">
   <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
@@ -43,6 +43,50 @@
     .expand-btn.expanded {
       transform: rotate(90deg);
     }
+      
+      .template-details-table {
+        font-size: 0.9rem;
+      }
+      
+      .template-detail-row:hover {
+        background-color: rgba(13, 110, 253, 0.1) !important;
+      }
+      
+      .template-detail-row {
+        transition: background-color 0.15s ease-in-out;
+      }
+      
+      .template-details-table .dataTables_wrapper {
+        font-size: 0.85rem;
+      }
+      
+      .template-details-table .dataTables_filter {
+        margin-bottom: 10px;
+      }
+      
+      .template-details-table .dataTables_length {
+        margin-bottom: 10px;
+      }
+      
+      .template-details-table tbody tr {
+        cursor: pointer;
+      }
+      
+      .template-details-table tbody tr:hover {
+        background-color: rgba(13, 110, 253, 0.1) !important;
+      }
+      
+      .quick-filter-group-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        pointer-events: none;
+      }
+      
+      .quick-filter.active {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+        color: white;
+      }
     .metric-badge {
       font-size: 0.8em;
     }
@@ -52,8 +96,26 @@
   </style>
 </head>
 <body class="bg-light">
-  <!-- 版本切換按鈕 -->
+  <!-- 頂部工具列 -->
   <div class="position-fixed" style="top: 20px; right: 20px; z-index: 1050;">
+    <div class="d-flex align-items-center gap-3">
+      <!-- 當前分析檔案資訊 - 小版本 -->
+      <div class="bg-white border rounded px-3 py-1 shadow-sm d-flex align-items-center">
+        <i class="fas fa-file-alt text-muted me-2" style="font-size: 0.9rem;"></i>
+        <span class="text-muted small me-2">目前：</span>
+        <strong id="currentAnalysisName" class="text-primary small">{{ current_analysis }}</strong>
+        <div class="dropdown ms-2">
+          <button class="btn btn-outline-primary btn-sm py-0 px-2 dropdown-toggle" type="button" id="switchAnalysisDropdown" data-bs-toggle="dropdown" aria-expanded="false" style="font-size: 0.8rem;" title="切換分析檔案">
+            <i class="fas fa-exchange-alt"></i>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="switchAnalysisDropdown" id="analysisDropdownList" style="max-height: 300px; overflow-y: auto;">
+            <!-- 分析檔案列表將動態載入 -->
+            <li><a class="dropdown-item disabled" href="#"><i class="fas fa-spinner fa-spin me-2"></i>載入中...</a></li>
+          </ul>
+        </div>
+      </div>
+      
+      <!-- 版本切換按鈕 -->
     <div class="bg-white border rounded p-2 shadow-sm">
       <div class="btn-group btn-group-sm">
         <a href="/" class="btn btn-primary">
@@ -62,6 +124,7 @@
         <a href="/legacy" class="btn btn-secondary">
           <i class="fas fa-history me-1"></i>舊版
         </a>
+        </div>
       </div>
     </div>
   </div>
@@ -70,16 +133,6 @@
     <div class="row">
       <div class="col-12">
         <h1 class="mb-4"><i class="fas fa-chart-line me-2"></i>SQL 慢查詢分析 Dashboard</h1>
-      </div>
-    </div>
-
-    <!-- 當前分析檔案資訊 -->
-    <div class="row mb-3">
-      <div class="col-12">
-        <div class="alert alert-info d-flex align-items-center">
-          <i class="fas fa-info-circle me-2"></i>
-          <span>當前分析檔案：<strong id="currentAnalysisName">{{ current_analysis }}</strong></span>
-        </div>
       </div>
     </div>
 
@@ -241,26 +294,28 @@
             <div class="row mb-3">
               <div class="col-md-4">
                 <label for="detailsTableFilter" class="form-label">表格篩選：</label>
-                <input type="text" id="detailsTableFilter" class="form-control" placeholder="輸入表格名稱">
-                <div class="form-text">支援部分匹配，多個表格用逗號分隔</div>
+                <select id="detailsTableFilter" class="form-select" multiple>
+                  <!-- 表格選項將動態載入 -->
+                </select>
+                <div class="form-text">可多選表格進行篩選</div>
               </div>
               <div class="col-md-8">
                 <label class="form-label">快速篩選：</label>
                 <div class="d-flex flex-wrap gap-1">
-                  <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-type="time" data-value="10">
-                    > 10s
+                  <button type="button" class="btn btn-sm btn-outline-success quick-filter" data-type="time" data-value="1" title="快速查詢 (< 1s)">
+                    <i class="fas fa-bolt me-1"></i>快速
                   </button>
-                  <button type="button" class="btn btn-sm btn-outline-warning quick-filter" data-type="time" data-value="30">
-                    > 30s
+                  <button type="button" class="btn btn-sm btn-outline-warning quick-filter" data-type="time" data-value="10" title="慢查詢 (> 10s)">
+                    <i class="fas fa-clock me-1"></i>> 10s
                   </button>
-                  <button type="button" class="btn btn-sm btn-outline-danger quick-filter" data-type="time" data-value="60">
-                    > 1分鐘
+                  <button type="button" class="btn btn-sm btn-outline-danger quick-filter" data-type="time" data-value="30" title="極慢查詢 (> 30s)">
+                    <i class="fas fa-exclamation-triangle me-1"></i>> 30s
                   </button>
-                  <button type="button" class="btn btn-sm btn-outline-secondary quick-filter" data-type="rows" data-value="100000">
-                    檢查行數 > 10萬
+                  <button type="button" class="btn btn-sm btn-outline-info quick-filter" data-type="rows" data-value="100000" title="大量掃描 (> 10萬行)">
+                    <i class="fas fa-database me-1"></i>> 10萬行
                   </button>
-                  <button type="button" class="btn btn-sm btn-outline-info quick-filter" data-type="rows" data-value="1000000">
-                    檢查行數 > 100萬
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="clearQuickFilters">
+                    <i class="fas fa-eraser me-1"></i>清除
                   </button>
                 </div>
               </div>
@@ -472,54 +527,24 @@
                  <h6 class="card-title mb-0"><i class="fas fa-upload me-2"></i>上傳檔案</h6>
                </div>
                <div class="card-body">
-                 <!-- 上傳模式選擇 -->
-                 <div class="mb-3">
-                   <div class="btn-group w-100" role="group">
-                     <input type="radio" class="btn-check" name="uploadMode" id="singleMode" value="single" checked>
-                     <label class="btn btn-outline-primary" for="singleMode">
-                       <i class="fas fa-file me-1"></i>單檔上傳
-                     </label>
-                     
-                     <input type="radio" class="btn-check" name="uploadMode" id="multipleMode" value="multiple">
-                     <label class="btn btn-outline-primary" for="multipleMode">
-                       <i class="fas fa-files me-1"></i>批量上傳
-                     </label>
-                   </div>
-                 </div>
-
-                 <!-- 單檔上傳表單 -->
+                 <!-- 檔案上傳表單 -->
                  <form id="uploadForm" enctype="multipart/form-data" class="upload-form">
                    <div class="mb-3">
-                     <label for="logFile" class="form-label">選擇檔案：</label>
-                     <input type="file" class="form-control" id="logFile" name="file" required>
-                     <div class="form-text">支援任何文字格式檔案</div>
+                     <label for="logFiles" class="form-label">選擇檔案：</label>
+                     <input type="file" class="form-control" id="logFiles" name="files" multiple required>
+                     <div class="form-text">
+                       <i class="fas fa-info-circle me-1"></i>
+                       支援任何格式，可選擇單個或多個檔案（最多20個）
+                     </div>
                    </div>
                    <div class="mb-3">
                      <label for="analysisName" class="form-label">分析檔案名稱 <small class="text-muted">(選填)</small>：</label>
                      <input type="text" class="form-control" id="analysisName" name="analysis_name" 
-                            placeholder="例如：2024-01-15_production (留空則自動命名)">
-                     <div class="form-text">留空則根據檔案名和時間自動命名</div>
-                   </div>
-                   <button type="submit" class="btn btn-primary" id="uploadSubmitBtn">
-                     <i class="fas fa-upload me-1"></i>上傳並分析
-                   </button>
-                 </form>
-
-                 <!-- 多檔上傳表單 -->
-                 <form id="multipleUploadForm" enctype="multipart/form-data" class="upload-form d-none">
-                   <div class="mb-3">
-                     <label for="multipleLogFiles" class="form-label">選擇多個檔案：</label>
-                     <input type="file" class="form-control" id="multipleLogFiles" name="files" multiple required>
-                     <div class="form-text">
-                       <i class="fas fa-info-circle me-1"></i>
-                       支援任何格式，可同時選擇多個檔案（最多20個）
-                     </div>
-                   </div>
-                   <div class="mb-3">
-                     <label for="multipleAnalysisName" class="form-label">分析檔案名稱 <small class="text-muted">(選填)</small>：</label>
-                     <input type="text" class="form-control" id="multipleAnalysisName" name="analysis_name" 
                             placeholder="例如：合併分析_2024-01-15 (留空則自動命名)">
-                     <div class="form-text">批量檔案將合併為一個分析，留空則自動命名</div>
+                     <div class="form-text">
+                       <strong>合併分析：</strong>所有檔案合併為一個分析<br>
+                       <strong>各自分析：</strong>忽略此欄位，每個檔案會自動命名並各自分析
+                     </div>
                    </div>
                    
                    <!-- 檔案預覽 -->
@@ -530,9 +555,15 @@
                      </div>
                    </div>
                    
-                   <button type="submit" class="btn btn-success" id="multipleUploadSubmitBtn">
-                     <i class="fas fa-layer-group me-1"></i>批量上傳並合併分析
+                   <!-- 按鈕組 -->
+                   <div class="d-grid gap-2">
+                     <button type="submit" class="btn btn-success" id="mergeUploadBtn">
+                       <i class="fas fa-layer-group me-1"></i>上傳並合併分析
                    </button>
+                     <button type="button" class="btn btn-primary" id="separateUploadBtn" onclick="uploadSeparately()">
+                       <i class="fas fa-file-alt me-1"></i>上傳並各自分析
+                     </button>
+                   </div>
                  </form>
                </div>
              </div>
@@ -543,9 +574,14 @@
              <div class="card">
                <div class="card-header d-flex justify-content-between align-items-center">
                  <h6 class="card-title mb-0"><i class="fas fa-folder me-2"></i>分析檔案列表</h6>
-                 <button class="btn btn-outline-secondary btn-sm" id="refreshFilesBtn">
+                 <div class="btn-group btn-group-sm">
+                   <button class="btn btn-outline-primary" id="mergeAnalysisBtn">
+                     <i class="fas fa-layer-group me-1"></i>合併分析
+                   </button>
+                   <button class="btn btn-outline-secondary" id="refreshFilesBtn">
                    <i class="fas fa-sync me-1"></i>重新整理
                  </button>
+                 </div>
                </div>
                <div class="card-body">
                  <div id="filesList">
@@ -742,9 +778,14 @@
            <div class="mb-3">
              <div class="d-flex justify-content-between align-items-center mb-2">
                <strong><i class="fas fa-database me-2"></i>SQL 查詢內容：</strong>
-               <button id="copySqlBtn" class="btn btn-sm btn-outline-secondary" title="複製 SQL">
-                 <i class="fas fa-copy me-1"></i>複製
-               </button>
+               <div class="btn-group btn-group-sm">
+                 <button id="toggleSqlFormatBtn" class="btn btn-outline-secondary" title="切換格式化顯示">
+                   <i class="fas fa-align-left me-1"></i>格式化
+                 </button>
+                 <button id="copySqlDisplayBtn" class="btn btn-outline-primary" title="複製當前顯示的 SQL">
+                   <i class="fas fa-copy me-1"></i>複製
+                 </button>
+               </div>
              </div>
              <div id="sqlDetailContent" class="bg-light p-3 rounded" style="font-family: 'Courier New', monospace; font-size: 14px; white-space: pre-wrap; overflow-x: auto; max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6;">
                <!-- SQL 內容將在這裡顯示 -->
@@ -758,8 +799,11 @@
          </div>
          <div class="modal-footer">
            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
-           <button type="button" class="btn btn-primary" id="copySqlBtn2">
-             <i class="fas fa-copy me-1"></i>複製 SQL
+           <button type="button" class="btn btn-outline-secondary" id="copyFormattedDataBtn">
+             <i class="fas fa-align-left me-1"></i>複製格式化資料
+           </button>
+           <button type="button" class="btn btn-primary" id="copyJsonDataBtn">
+             <i class="fas fa-code me-1"></i>複製 JSON 資料
            </button>
          </div>
        </div>
@@ -775,7 +819,389 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
 
   <script>
-    // 全域函數定義 (供 onclick 使用)
+    // 全域變數定義
+    let detailsTable;
+    let analysisLoaded = false;
+    let currentSqlDetailItem = null; // 儲存當前 SQL 詳情的資料
+    let isFormatted = true; // 記錄當前 SQL 顯示狀態（預設開啟格式化）
+    
+    // Chart.js 圖表實例
+    let typeChart = null;
+    let timeRangeChart = null;
+    let userChart = null;
+    let tableChart = null;
+    
+    // 全域函數定義
+    function loadDetailsData() {
+      const search = $('#detailsSearch').val() || '';
+      const minTime = $('#detailsMinTime').val() || '0';
+      const sqlType = $('#detailsTypeFilter').val() || '';
+      const userFilter = $('#detailsUserFilter').val() || '';
+      const tableFilter = $('#detailsTableFilter').val() || [];
+
+      $('#detailsLoading').removeClass('d-none');
+
+      // 構建請求參數，排除空值
+      const params = {
+        page: 1,
+        size: 1000 // API 限制最大 1000 筆
+      };
+      
+      if (search) params.search = search;
+      if (minTime && minTime !== '0') params.min_time = minTime;
+      if (sqlType) params.sql_type = sqlType;
+      if (userFilter) params.user_filter = userFilter;
+      if (tableFilter && tableFilter.length > 0) params.table_filter = tableFilter.join(',');
+
+      // 載入所有資料的函數
+      function loadAllPages(allData = [], currentPage = 1) {
+        const currentParams = { ...params, page: currentPage };
+        
+        $.ajax({
+          url: '/api/raw_queries',
+          method: 'GET',
+          data: currentParams,
+          success: function(response) {
+            console.log(`載入第 ${currentPage} 頁，收到 ${response.data.length} 筆資料`);
+            
+            // 合併資料
+            allData = allData.concat(response.data || []);
+            
+            // 檢查是否還有更多頁面
+            if (response.data && response.data.length === 1000 && currentPage < response.total_pages) {
+              // 還有更多頁面，繼續載入
+              loadAllPages(allData, currentPage + 1);
+            } else {
+              // 載入完成
+              $('#detailsLoading').addClass('d-none');
+              console.log('總共載入', allData.length, '筆資料');
+              
+              if (allData.length > 0) {
+                // 清空並重新載入資料
+                detailsTable.clear();
+                detailsTable.rows.add(allData);
+                detailsTable.draw();
+                
+                // 顯示統計
+                $('#detailsStats').removeClass('d-none');
+                $('#statsText').text(`找到 ${response.total || allData.length} 筆記錄`);
+                
+                // 隱藏自定義分頁控制
+                $('#detailsPagination, #detailsPageInfo').hide();
+              } else {
+                console.log('沒有收到資料');
+                detailsTable.clear().draw();
+                $('#detailsStats').addClass('d-none');
+                $('#detailsPagination, #detailsPageInfo').hide();
+              }
+            }
+          },
+          error: function(xhr) {
+            $('#detailsLoading').addClass('d-none');
+            console.log('載入失敗:', xhr.responseText);
+            detailsTable.clear().draw();
+            $('#detailsStats').addClass('d-none');
+          }
+        });
+      }
+      
+      // 開始載入第一頁
+      loadAllPages();
+    }
+
+    function loadAnalysisData() {
+      // 顯示載入中狀態
+      $('#analysisLoading').show().html('<div class="text-center"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>');
+
+      $.ajax({
+        url: '/api/performance_stats',
+        method: 'GET',
+        success: function(data) {
+          $('#analysisLoading').hide();
+          analysisLoaded = true;
+
+          // 更新基本統計卡片
+          $('#totalQueries').text(data.basic_stats.total_queries.toLocaleString());
+          $('#avgTime').text(data.basic_stats.avg_query_time + 's');
+          $('#maxTime').text(data.basic_stats.max_query_time + 's');
+          $('#medianTime').text(data.basic_stats.median_query_time + 's');
+
+          // 創建圖表（會自動銷毀舊的）
+          createTypeChart(data.type_stats);
+          createTimeRangeChart(data.time_ranges);
+          createUserChart(data.user_stats);
+          createTableChart(data.table_stats);
+          updateTypePerformanceTable(data.type_performance);
+        },
+        error: function() {
+          $('#analysisLoading').html('<div class="alert alert-danger">載入效能分析資料失敗</div>');
+        }
+      });
+    }
+
+    // 創建SQL類型圓餅圖
+    function createTypeChart(typeStats) {
+      // 銷毀舊的圖表
+      if (typeChart) {
+        typeChart.destroy();
+      }
+      
+      const ctx = document.getElementById('typeChart').getContext('2d');
+      typeChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: Object.keys(typeStats),
+          datasets: [{
+            data: Object.values(typeStats),
+            backgroundColor: [
+              '#007bff', '#28a745', '#ffc107', '#dc3545', '#6c757d', '#17a2b8'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    }
+
+    // 創建時間分布長條圖
+    function createTimeRangeChart(timeRanges) {
+      // 銷毀舊的圖表
+      if (timeRangeChart) {
+        timeRangeChart.destroy();
+      }
+      
+      const ctx = document.getElementById('timeRangeChart').getContext('2d');
+      timeRangeChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(timeRanges),
+          datasets: [{
+            label: '查詢次數',
+            data: Object.values(timeRanges),
+            backgroundColor: 'rgba(54, 162, 235, 0.8)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // 創建用戶活動圖表
+    function createUserChart(userStats) {
+      // 銷毀舊的圖表
+      if (userChart) {
+        userChart.destroy();
+      }
+      
+      const ctx = document.getElementById('userChart').getContext('2d');
+      userChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(userStats),
+          datasets: [{
+            label: '查詢次數',
+            data: Object.values(userStats),
+            backgroundColor: 'rgba(255, 99, 132, 0.8)',
+            borderColor: 'rgba(255, 99, 132, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // 創建表格使用圖表
+    function createTableChart(tableStats) {
+      // 銷毀舊的圖表
+      if (tableChart) {
+        tableChart.destroy();
+      }
+      
+      const ctx = document.getElementById('tableChart').getContext('2d');
+      tableChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: Object.keys(tableStats),
+          datasets: [{
+            label: '使用次數',
+            data: Object.values(tableStats),
+            backgroundColor: 'rgba(75, 192, 192, 0.8)',
+            borderColor: 'rgba(75, 192, 192, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true
+            }
+          }
+        }
+      });
+    }
+
+    // 更新類型效能表格
+    function updateTypePerformanceTable(typePerformance) {
+      let html = '';
+      for (const [type, stats] of Object.entries(typePerformance)) {
+        const grade = getPerformanceGrade(stats.avg_time);
+        html += `
+          <tr>
+            <td><span class="badge bg-${getSqlTypeBadgeClass(type)}">${type}</span></td>
+            <td>${stats.count.toLocaleString()}</td>
+            <td><span class="${getTimeClass(stats.avg_time)}">${stats.avg_time}s</span></td>
+            <td><span class="${getTimeClass(stats.max_time)}">${stats.max_time}s</span></td>
+            <td><span class="badge bg-${grade.class}">${grade.text}</span></td>
+          </tr>
+        `;
+      }
+      $('#typePerformanceTable').html(html);
+    }
+
+    function getPerformanceGrade(avgTime) {
+      if (avgTime < 0.1) return { class: 'success', text: '優秀' };
+      if (avgTime < 1) return { class: 'info', text: '良好' };
+      if (avgTime < 5) return { class: 'warning', text: '普通' };
+      if (avgTime < 10) return { class: 'danger', text: '較差' };
+      return { class: 'dark', text: '極差' };
+    }
+
+    function initDetailsTable() {
+      // 檢查是否已經初始化
+      if ($.fn.DataTable.isDataTable('#detailsTable')) {
+        $('#detailsTable').DataTable().destroy();
+      }
+      
+      // 初始化 DataTables
+      detailsTable = $('#detailsTable').DataTable({
+        "processing": true,
+        "serverSide": false,
+        "pageLength": 50,
+        "order": [[1, "desc"]], // 依查詢時間降序
+        "columnDefs": [
+          { "orderable": false, "targets": [8] }, // SQL 查詢欄位不可排序
+          { "type": "num", "targets": [1, 2, 3, 4] }, // 數字欄位
+          { "searchable": false, "targets": [0, 5, 6, 7] }, // 部分欄位不參與搜尋
+          { 
+            "targets": [1], // 查詢時間欄位
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                return parseFloat(data) || 0;
+              }
+              let timeClass = 'text-success';
+              if (data > 10) timeClass = 'text-danger fw-bold';
+              else if (data > 1) timeClass = 'text-warning';
+              return `<span class="${timeClass}">${data}s</span>`;
+            }
+          },
+          { 
+            "targets": [2], // 鎖定時間欄位
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                return parseFloat(data) || 0;
+              }
+              return data + 's';
+            }
+          },
+          { 
+            "targets": [3], // 檢查行數欄位
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                return parseInt(data) || 0;
+              }
+              return data.toLocaleString();
+            }
+          },
+          { 
+            "targets": [4], // 回傳行數欄位
+            "render": function(data, type, row) {
+              if (type === 'sort' || type === 'type') {
+                return parseInt(data) || 0;
+              }
+              return data.toLocaleString();
+            }
+          }
+        ],
+        "language": {
+          "lengthMenu": "顯示 _MENU_ 筆記錄",
+          "zeroRecords": "目前沒有資料",
+          "info": "顯示第 _START_ 到 _END_ 筆記錄，共 _TOTAL_ 筆",
+          "infoEmpty": "沒有記錄",
+          "infoFiltered": "(從 _MAX_ 筆記錄中篩選)",
+          "search": "搜尋:",
+          "paginate": {
+            "first": "第一頁",
+            "last": "最後一頁", 
+            "next": "下一頁",
+            "previous": "上一頁"
+          }
+        },
+        "data": [],
+        "columns": [
+          { "data": "sql_type", "render": function(data) {
+            const classes = {
+              'SELECT': 'primary',
+              'INSERT': 'success', 
+              'UPDATE': 'warning',
+              'DELETE': 'danger',
+              'OTHER': 'secondary'
+            };
+            const badgeClass = classes[data] || 'secondary';
+            return `<span class="badge bg-${badgeClass}">${data}</span>`;
+          }},
+          { "data": "query_time" }, // 使用 columnDefs 中的 render
+          { "data": "lock_time" }, // 使用 columnDefs 中的 render
+          { "data": "rows_examined" }, // 使用 columnDefs 中的 render
+          { "data": "rows_sent" }, // 使用 columnDefs 中的 render
+          { "data": null, "render": function(data) { 
+            return `<small>${data.user}@${data.host}</small>`;
+          }},
+          { "data": "schema", "render": function(data) { return `<small>${data || '-'}</small>`; }},
+          { "data": "tables_used", "render": function(data) {
+            const tablesText = data && data.length > 0 ? data.join(', ') : '-';
+            return `<small style="max-width: 150px; overflow: visible; white-space: normal; word-wrap: break-word;">${tablesText}</small>`;
+          }},
+          { "data": null, "render": function(data) {
+            const sqlPreview = data.sql.substring(0, 100) + (data.sql.length > 100 ? '...' : '');
+            const icon = data.sql.length > 100 ? '<i class="fas fa-external-link-alt ms-1 text-primary"></i>' : '';
+            const escapedData = JSON.stringify(data).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+            return `<code class="sql-template sql-clickable" style="cursor: pointer; color: #0066cc;" 
+                          onclick="showSqlDetail(${escapedData})" 
+                          title="點擊查看完整 SQL">
+                      ${sqlPreview}${icon}
+                    </code>`;
+          }}
+        ]
+      });
+    }
+    
     function switchToAnalysis(analysisName) {
       $.ajax({
         url: `/api/switch_analysis/${encodeURIComponent(analysisName)}`,
@@ -783,8 +1209,37 @@
         success: function(response) {
           if (response.success) {
             $('#currentAnalysisName').text(analysisName);
-            // 重新載入頁面資料
+            
+            // 獲取當前活躍的分頁
+            const currentTab = $('.nav-link.active').attr('data-bs-target');
+            
+            // 重設效能分析載入狀態
+            analysisLoaded = false;
+            
+            // 根據當前分頁直接刷新資料，不設定 needsDataRefresh
+            if (currentTab === '#summary') {
+              // 樣板統計頁面：重新載入頁面
             window.location.reload();
+            } else if (currentTab === '#details') {
+              // 原始查詢列表：重新載入表格選項和資料
+              window.loadTableOptions();
+              if (detailsTable) {
+                loadDetailsData();
+              } else {
+                initDetailsTable();
+                loadDetailsData();
+              }
+            } else if (currentTab === '#analysis') {
+              // 效能分析：重設狀態並重新載入圖表
+              analysisLoaded = false;
+              loadAnalysisData();
+            } else if (currentTab === '#manage') {
+              // 檔案管理：只刷新檔案列表
+              window.loadFilesList();
+            } else {
+              // 其他情況：重新載入頁面
+              window.location.reload();
+            }
           }
         },
         error: function(xhr) {
@@ -794,6 +1249,13 @@
     }
 
     function showSqlDetail(item) {
+      // 儲存當前項目資料
+      currentSqlDetailItem = item;
+      
+      // 重設格式化狀態
+      isFormatted = false;
+      updateFormatButton();
+      
       // 設定 SQL 類型標籤
       const typeClass = getSqlTypeBadgeClass(item.sql_type);
       $('#sqlDetailType').removeClass().addClass(`badge bg-${typeClass}`).text(item.sql_type);
@@ -815,8 +1277,8 @@
         : '無明確表格';
       $('#sqlDetailTables').text(tablesText);
       
-      // 設定 SQL 內容
-      $('#sqlDetailContent').text(item.sql);
+      // 設定 SQL 內容（預設顯示原始格式）
+      updateSqlDisplay();
       
       // 設定執行時間
       $('#sqlDetailExecuteTime').text(item.time || '未知');
@@ -824,6 +1286,110 @@
       // 顯示 Modal
       $('#sqlDetailModal').modal('show');
     }
+
+    // 改進的 SQL 格式化函數
+    function formatSql(sql) {
+      if (!sql) return '';
+      
+      console.log('原始 SQL:', sql); // 除錯用
+      
+      // 移除多餘的空白字符但保留單個空格
+      let formatted = sql.replace(/\s+/g, ' ').trim();
+      
+      // 主要關鍵字換行處理（按順序處理，避免衝突）
+      formatted = formatted.replace(/\bSELECT\b/gi, '\nSELECT');
+      formatted = formatted.replace(/\bFROM\b/gi, '\nFROM');
+      formatted = formatted.replace(/\bLEFT\s+JOIN\b/gi, '\n  LEFT JOIN');
+      formatted = formatted.replace(/\bRIGHT\s+JOIN\b/gi, '\n  RIGHT JOIN');
+      formatted = formatted.replace(/\bINNER\s+JOIN\b/gi, '\n  INNER JOIN');
+      formatted = formatted.replace(/\bFULL\s+JOIN\b/gi, '\n  FULL JOIN');
+      formatted = formatted.replace(/\bJOIN\b/gi, '\n  JOIN');
+      formatted = formatted.replace(/\bWHERE\b/gi, '\nWHERE');
+      formatted = formatted.replace(/\bGROUP\s+BY\b/gi, '\nGROUP BY');
+      formatted = formatted.replace(/\bHAVING\b/gi, '\nHAVING');
+      formatted = formatted.replace(/\bORDER\s+BY\b/gi, '\nORDER BY');
+      formatted = formatted.replace(/\bLIMIT\b/gi, '\nLIMIT');
+      formatted = formatted.replace(/\bUNION\s+ALL\b/gi, '\n\nUNION ALL\n');
+      formatted = formatted.replace(/\bUNION\b/gi, '\n\nUNION\n');
+      
+      // 處理 AND 和 OR（在 WHERE 條件中）
+      formatted = formatted.replace(/\bAND\b/gi, '\n  AND');
+      formatted = formatted.replace(/\bOR\b/gi, '\n  OR');
+      
+      // 處理子查詢的括號
+      formatted = formatted.replace(/\(\s*SELECT/gi, '(\n    SELECT');
+      formatted = formatted.replace(/\)\s*(game|tpa|tx)/gi, '\n  ) $1');
+      
+      // 處理 ON 條件
+      formatted = formatted.replace(/\bON\b/gi, '\n    ON');
+      
+      // 清理多餘的換行和空格
+      formatted = formatted.replace(/\n\s*\n\s*\n/g, '\n\n');
+      formatted = formatted.replace(/^\n+/, '');
+      formatted = formatted.trim();
+      
+      // 處理每一行的縮排
+      const lines = formatted.split('\n');
+      const indentedLines = lines.map((line, index) => {
+        line = line.trim();
+        if (!line) return '';
+        
+        // 根據關鍵字決定縮排
+        if (line.match(/^(SELECT|FROM|WHERE|GROUP BY|HAVING|ORDER BY|LIMIT|UNION)/i)) {
+          return line;
+        } else if (line.match(/^(LEFT JOIN|RIGHT JOIN|INNER JOIN|FULL JOIN|JOIN)/i)) {
+          return '  ' + line;
+        } else if (line.match(/^(AND|OR|ON)/i)) {
+          return '    ' + line;
+        } else if (line.match(/^\)/)) {
+          return '  ' + line;
+        } else if (line.match(/^\(/)) {
+          return '    ' + line;
+        } else {
+          // 其他情況保持適度縮排
+          return '  ' + line;
+        }
+      });
+      
+      const result = indentedLines.join('\n');
+      console.log('格式化後 SQL:', result); // 除錯用
+      
+      return result;
+    }
+
+    // 更新 SQL 顯示內容
+    function updateSqlDisplay() {
+      if (!currentSqlDetailItem || !currentSqlDetailItem.sql) {
+        console.log('無 SQL 資料可顯示'); // 除錯用
+        $('#sqlDetailContent').text('');
+        return;
+      }
+      
+      console.log('更新顯示，isFormatted:', isFormatted); // 除錯用
+      
+      if (isFormatted) {
+        const formattedSql = formatSql(currentSqlDetailItem.sql);
+        $('#sqlDetailContent').text(formattedSql);
+        console.log('已設定格式化 SQL'); // 除錯用
+      } else {
+        $('#sqlDetailContent').text(currentSqlDetailItem.sql);
+        console.log('已設定原始 SQL'); // 除錯用
+      }
+    }
+
+    // 更新格式化按鈕狀態
+    function updateFormatButton() {
+      const $btn = $('#toggleSqlFormatBtn');
+      if (isFormatted) {
+        $btn.removeClass('btn-outline-secondary').addClass('btn-secondary');
+        $btn.html('<i class="fas fa-align-left me-1"></i>已格式化');
+      } else {
+        $btn.removeClass('btn-secondary').addClass('btn-outline-secondary');
+        $btn.html('<i class="fas fa-align-left me-1"></i>格式化');
+      }
+    }
+
+    
 
     function getSqlTypeBadgeClass(type) {
       const classes = {
@@ -870,6 +1436,7 @@
     }
 
     $(document).ready(function () {
+      
       // 檢查並載入當前分析檔案名稱
       if (!$('#currentAnalysisName').text().trim() || $('#currentAnalysisName').text().trim() === '{{ current_analysis }}') {
         $.ajax({
@@ -883,12 +1450,100 @@
           }
         });
       }
+      
+      // 載入下拉選單的分析檔案列表
+      window.loadAnalysisDropdownList = function() {
+        $.ajax({
+          url: '/api/analysis_files',
+          method: 'GET',
+          success: function(response) {
+            let html = '';
+            response.analysis_files.forEach(file => {
+              if (!file.is_current) { // 只顯示非當前檔案
+                html += `
+                  <li><a class="dropdown-item" href="#" onclick="switchToAnalysisFromDropdown('${file.name}')">
+                    <i class="fas fa-file-text me-2"></i>${file.name}
+                    <br><small class="text-muted ms-3">查詢：${file.metadata.total_queries} | 樣板：${file.metadata.total_templates}</small>
+                  </a></li>
+                `;
+              }
+            });
+            
+            if (html === '') {
+              html = '<li><a class="dropdown-item disabled" href="#"><i class="fas fa-info-circle me-2"></i>無其他分析檔案</a></li>';
+            }
+            
+            $('#analysisDropdownList').html(html);
+          },
+          error: function() {
+            $('#analysisDropdownList').html('<li><a class="dropdown-item disabled" href="#"><i class="fas fa-exclamation-triangle me-2"></i>載入失敗</a></li>');
+          }
+        });
+      };
+      
+      // 從下拉選單切換分析檔案
+      window.switchToAnalysisFromDropdown = function(analysisName) {
+        switchToAnalysis(analysisName);
+        // 重新載入下拉選單
+        setTimeout(() => {
+          window.loadAnalysisDropdownList();
+        }, 1000);
+      };
+      
+      // 當下拉選單展開時載入檔案列表
+      $('#switchAnalysisDropdown').on('shown.bs.dropdown', function() {
+        window.loadAnalysisDropdownList();
+      });
+      
+      // 初始載入下拉選單列表
+      window.loadAnalysisDropdownList();
 
       // 初始化 Select2
       $('#typeFilter').select2({
         placeholder: "選擇一或多種類型",
         width: '100%',
         allowClear: true
+      });
+
+      // 初始化表格篩選器
+      $('#detailsTableFilter').select2({
+        placeholder: "選擇表格進行篩選",
+        width: '100%',
+        allowClear: true
+      });
+
+      // 載入表格選項
+      window.loadTableOptions = function() {
+        $.ajax({
+          url: '/api/tables_list',
+          method: 'GET',
+          success: function(response) {
+            const options = response.tables.map(table => ({
+              id: table,
+              text: table
+            }));
+            
+            // 清空並重新載入選項
+            $('#detailsTableFilter').empty();
+            $('#detailsTableFilter').select2({
+              placeholder: "選擇表格進行篩選",
+              width: '100%',
+              allowClear: true,
+              data: options
+            });
+          },
+          error: function() {
+            console.log('載入表格列表失敗');
+          }
+        });
+      };
+
+             // 初始載入表格選項
+       window.loadTableOptions();
+
+       // 監聽表格篩選器變化
+       $('#detailsTableFilter').on('change', function() {
+         loadDetailsData();
       });
 
       // 自定義篩選函數
@@ -979,14 +1634,17 @@
            const expandableRowHtml = `
              <tr class="expandable-row">
                <td colspan="6">
-                 <div class="p-3">
+                 <div class="p-3 bg-light border-start border-primary border-4">
                    <div class="d-flex justify-content-between align-items-center mb-3">
-                     <h6><i class="fas fa-code me-2"></i>原始 SQL 查詢 (共 ${count} 筆)</h6>
+                     <div>
+                       <h6 class="mb-1"><i class="fas fa-list me-2 text-primary"></i>此樣板的原始查詢記錄</h6>
+                       <small class="text-muted">共 ${count} 筆查詢，點擊任一行查看完整詳情</small>
+                     </div>
                      <div class="loading-spinner">
-                       <i class="fas fa-spinner fa-spin"></i> 載入中...
+                       <i class="fas fa-spinner fa-spin text-primary"></i> 載入中...
                      </div>
                    </div>
-                   <div id="raw-sql-container-${templateIndex}" class="raw-sql-container" style="max-height: 500px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 5px;">
+                   <div id="raw-sql-container-${templateIndex}" class="raw-sql-container" style="max-height: 600px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; background: white;">
                      <!-- 原始 SQL 內容將透過 AJAX 載入 -->
                    </div>
                  </div>
@@ -1011,30 +1669,131 @@
              success: function(response) {
                $spinner.hide();
                if (response.raw_sqls && response.raw_sqls.length > 0) {
-                 let html = '';
+                 // 創建類似原始查詢列表的表格，使用唯一 ID
+                 const tableId = `template-detail-table-${templateIndex}`;
+                 let html = `
+                   <div class="table-responsive">
+                     <table id="${tableId}" class="table table-sm table-hover template-details-table">
+                       <thead class="table-light">
+                         <tr>
+                           <th width="8%">類型</th>
+                           <th width="10%">查詢時間</th>
+                           <th width="8%">鎖定時間</th>
+                           <th width="10%">檢查行數</th>
+                           <th width="8%">回傳行數</th>
+                           <th width="15%">用戶@主機</th>
+                           <th width="12%">資料庫</th>
+                           <th width="12%">執行時間</th>
+                           <th width="17%">SQL 查詢</th>
+                         </tr>
+                       </thead>
+                       <tbody>
+                 `;
+                 
                  response.raw_sqls.forEach((sql, index) => {
+                   // 修復 SQL 類型問題 - 檢查多種可能的欄位名稱
+                   const sqlType = sql.sql_type || sql.type || sql.query_type || 'OTHER';
+                   const typeClass = getSqlTypeBadgeClass(sqlType);
+                   const timeClass = getTimeClass(sql.query_time);
+                   const previewSql = (sql.original_sql || sql.sql || '').length > 100 ? 
+                     (sql.original_sql || sql.sql).substring(0, 100) + '...' : (sql.original_sql || sql.sql);
+                   
                    html += `
-                     <div class="raw-sql-item">
-                       <div class="row mb-2">
-                         <div class="col-md-3">
-                           <span class="badge bg-info metric-badge">查詢時間: ${sql.query_time}s</span>
-                         </div>
-                         <div class="col-md-3">
-                           <span class="badge bg-secondary metric-badge">檢查行數: ${sql.rows_examined}</span>
-                         </div>
-                         <div class="col-md-3">
-                           <span class="badge bg-primary metric-badge">回傳行數: ${sql.rows_sent}</span>
-                         </div>
-                         <div class="col-md-3">
-                           <small class="text-muted">用戶: ${sql.user}@${sql.host}</small>
-                         </div>
-                       </div>
-                       <div class="raw-sql-content">${sql.original_sql}</div>
-                       ${sql.time ? `<small class="text-muted">時間: ${sql.time}</small>` : ''}
-                     </div>
+                     <tr class="template-detail-row" data-sql-index="${index}" style="cursor: pointer;" 
+                         title="點擊查看完整 SQL 詳情">
+                       <td>
+                         <span class="badge bg-${typeClass}">${sqlType}</span>
+                       </td>
+                       <td data-sort="${sql.query_time}"><span class="${timeClass}">${sql.query_time}s</span></td>
+                       <td data-sort="${sql.lock_time}">${sql.lock_time}s</td>
+                       <td data-sort="${sql.rows_examined}">${sql.rows_examined.toLocaleString()}</td>
+                       <td data-sort="${sql.rows_sent}">${sql.rows_sent.toLocaleString()}</td>
+                       <td><small>${sql.user}@${sql.host}</small></td>
+                       <td><small>${sql.schema || '-'}</small></td>
+                       <td><small>${sql.time || '未知'}</small></td>
+                       <td>
+                         <code class="small text-truncate d-block" style="max-width: 200px;">
+                           ${previewSql}
+                         </code>
+                       </td>
+                     </tr>
                    `;
                  });
+                 
+                 html += `
+                       </tbody>
+                     </table>
+                         </div>
+                   <div class="mt-2 text-muted small">
+                     <i class="fas fa-info-circle me-1"></i>
+                     此表格支援排序、分頁和搜尋功能，點擊任一行查看完整 SQL 詳情
+                     </div>
+                   `;
+                 
                  $container.html(html);
+                 
+                 // 儲存資料供點擊事件使用
+                 $container.data('sqlData', response.raw_sqls);
+                 
+                 // 初始化 DataTable 支援排序
+                 const detailTable = $(`#${tableId}`).DataTable({
+                   "pageLength": 10,
+                   "lengthMenu": [[5, 10, 25, 50], [5, 10, 25, 50]],
+                   "order": [[1, "desc"]], // 依查詢時間降序
+                   "columnDefs": [
+                     { "orderable": false, "targets": [8] }, // SQL 查詢欄位不可排序
+                     { "type": "num", "targets": [1, 2, 3, 4] }, // 數字欄位
+                     { "searchable": false, "targets": [0, 5, 6, 7] } // 部分欄位不參與搜尋
+                   ],
+                   "language": {
+                     "lengthMenu": "顯示 _MENU_ 筆",
+                     "zeroRecords": "沒有資料",
+                     "info": "顯示 _START_ 到 _END_ 筆，共 _TOTAL_ 筆",
+                     "infoEmpty": "沒有記錄",
+                     "infoFiltered": "(從 _MAX_ 筆記錄中篩選)",
+                     "search": "搜尋:",
+                     "paginate": {
+                       "first": "第一頁",
+                       "last": "最後一頁", 
+                       "next": "下一頁",
+                       "previous": "上一頁"
+                     }
+                   },
+                   "dom": '<"row"<"col-sm-6"l><"col-sm-6"f>>rtip'
+                 });
+                 
+                 // 綁定點擊事件
+                 $(`#${tableId} tbody`).on('click', 'tr', function() {
+                   const data = detailTable.row(this).data();
+                   if (data) {
+                     const sqlIndex = $(this).find('.template-detail-row').data('sql-index') || 
+                                     detailTable.row(this).index();
+                     const sqlData = $container.data('sqlData');
+                     const selectedSql = sqlData[sqlIndex];
+                     
+                     if (selectedSql) {
+                       // 調整資料結構以符合 showSqlDetail 函數的期望
+                       const sqlType = selectedSql.sql_type || selectedSql.type || selectedSql.query_type || 'OTHER';
+                       const sqlItem = {
+                         sql_type: sqlType,
+                         query_time: selectedSql.query_time,
+                         lock_time: selectedSql.lock_time,
+                         user: selectedSql.user,
+                         host: selectedSql.host,
+                         schema: selectedSql.schema,
+                         rows_examined: selectedSql.rows_examined,
+                         rows_sent: selectedSql.rows_sent,
+                         tables_used: selectedSql.tables_used || [],
+                         sql: selectedSql.original_sql || selectedSql.sql, // 映射 original_sql 到 sql
+                         time: selectedSql.time
+                       };
+                       
+                       // 使用現有的 showSqlDetail 函數
+                       showSqlDetail(sqlItem);
+                     }
+                   }
+                 });
+                 
                } else {
                  $container.html('<div class="alert alert-warning">無可用的原始 SQL 資料</div>');
                }
@@ -1049,6 +1808,11 @@
            if ($btn.hasClass('expanded')) {
              // 收合
              $btn.removeClass('expanded');
+             // 清理 DataTable
+             const existingTable = $expandableRow.find('table[id^="template-detail-table-"]');
+             if (existingTable.length && $.fn.DataTable.isDataTable(existingTable)) {
+               existingTable.DataTable().destroy();
+             }
              $expandableRow.remove();
            } else {
              // 展開
@@ -1066,12 +1830,16 @@
          // 如果切換到統計頁面，重新調整表格
          if (target === '#summary') {
            setTimeout(() => {
+             if (table) {
              table.columns.adjust();
+             }
            }, 100);
          }
          // 如果切換到原始查詢頁面，初始化並載入資料
          else if (target === '#details') {
            console.log('切換到原始查詢列表頁面'); // 除錯用
+           // 確保表格選項已載入
+           window.loadTableOptions();
            if (!detailsTable) {
              console.log('初始化 DataTables'); // 除錯用
              initDetailsTable();
@@ -1089,160 +1857,9 @@
          }
        });
 
-       // 原始查詢列表功能
-       let detailsTable;
+       // 原始查詢列表功能已移到全域
 
-              function initDetailsTable() {
-         // 檢查是否已經初始化
-         if ($.fn.DataTable.isDataTable('#detailsTable')) {
-           $('#detailsTable').DataTable().destroy();
-         }
-         
-         // 初始化 DataTables
-         detailsTable = $('#detailsTable').DataTable({
-           "processing": true,
-           "serverSide": false,
-           "pageLength": 50,
-           "order": [[1, "desc"]], // 依查詢時間降序
-           "columnDefs": [
-             { "orderable": false, "targets": [8] }, // SQL 查詢欄位不可排序
-             { "type": "num", "targets": [1, 2, 3, 4] }, // 數字欄位
-             { "searchable": false, "targets": [0, 5, 6, 7] } // 部分欄位不參與搜尋
-           ],
-           "language": {
-             "lengthMenu": "顯示 _MENU_ 筆記錄",
-             "zeroRecords": "目前沒有資料",
-             "info": "顯示第 _START_ 到 _END_ 筆記錄，共 _TOTAL_ 筆",
-             "infoEmpty": "沒有記錄",
-             "infoFiltered": "(從 _MAX_ 筆記錄中篩選)",
-             "search": "搜尋:",
-             "paginate": {
-               "first": "第一頁",
-               "last": "最後一頁", 
-               "next": "下一頁",
-               "previous": "上一頁"
-             }
-           },
-           "data": [],
-           "columns": [
-             { "data": "sql_type", "render": function(data) {
-               const classes = {
-                 'SELECT': 'primary',
-                 'INSERT': 'success', 
-                 'UPDATE': 'warning',
-                 'DELETE': 'danger',
-                 'OTHER': 'secondary'
-               };
-               const badgeClass = classes[data] || 'secondary';
-               return `<span class="badge bg-${badgeClass}">${data}</span>`;
-             }},
-             { "data": "query_time", "render": function(data) {
-               let timeClass = 'text-success';
-               if (data > 10) timeClass = 'text-danger fw-bold';
-               else if (data > 1) timeClass = 'text-warning';
-               return `<span class="${timeClass}">${data}s</span>`;
-             }},
-             { "data": "lock_time", "render": function(data) { return data + 's'; }},
-             { "data": "rows_examined", "render": function(data) { return data.toLocaleString(); }},
-             { "data": "rows_sent", "render": function(data) { return data.toLocaleString(); }},
-             { "data": null, "render": function(data) { 
-               return `<small>${data.user}@${data.host}</small>`;
-             }},
-             { "data": "schema", "render": function(data) { return `<small>${data || '-'}</small>`; }},
-             { "data": "tables_used", "render": function(data) {
-               const tablesText = data && data.length > 0 ? data.join(', ') : '-';
-               return `<small style="max-width: 150px; overflow: visible; white-space: normal; word-wrap: break-word;">${tablesText}</small>`;
-             }},
-             { "data": null, "render": function(data) {
-               const sqlPreview = data.sql.substring(0, 100) + (data.sql.length > 100 ? '...' : '');
-               const icon = data.sql.length > 100 ? '<i class="fas fa-external-link-alt ms-1 text-primary"></i>' : '';
-               const escapedData = JSON.stringify(data).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-               return `<code class="sql-template sql-clickable" style="cursor: pointer; color: #0066cc;" 
-                             onclick="showSqlDetail(${escapedData})" 
-                             title="點擊查看完整 SQL">
-                         ${sqlPreview}${icon}
-                       </code>`;
-             }}
-           ]
-         });
-       }
 
-       function loadDetailsData() {
-         const search = $('#detailsSearch').val() || '';
-         const minTime = $('#detailsMinTime').val() || '0';
-         const sqlType = $('#detailsTypeFilter').val() || '';
-         const userFilter = $('#detailsUserFilter').val() || '';
-         const tableFilter = $('#detailsTableFilter').val() || '';
-
-         $('#detailsLoading').removeClass('d-none');
-
-         // 構建請求參數，排除空值
-         const params = {
-           page: 1,
-           size: 1000 // API 限制最大 1000 筆
-         };
-         
-         if (search) params.search = search;
-         if (minTime && minTime !== '0') params.min_time = minTime;
-         if (sqlType) params.sql_type = sqlType;
-         if (userFilter) params.user_filter = userFilter;
-         if (tableFilter) params.table_filter = tableFilter;
-
-         // 載入所有資料的函數
-         function loadAllPages(allData = [], currentPage = 1) {
-           const currentParams = { ...params, page: currentPage };
-           
-           $.ajax({
-             url: '/api/raw_queries',
-             method: 'GET',
-             data: currentParams,
-             success: function(response) {
-               console.log(`載入第 ${currentPage} 頁，收到 ${response.data.length} 筆資料`);
-               
-               // 合併資料
-               allData = allData.concat(response.data || []);
-               
-               // 檢查是否還有更多頁面
-               if (response.data && response.data.length === 1000 && currentPage < response.total_pages) {
-                 // 還有更多頁面，繼續載入
-                 loadAllPages(allData, currentPage + 1);
-               } else {
-                 // 載入完成
-                 $('#detailsLoading').addClass('d-none');
-                 console.log('總共載入', allData.length, '筆資料');
-                 
-                 if (allData.length > 0) {
-                   // 清空並重新載入資料
-                   detailsTable.clear();
-                   detailsTable.rows.add(allData);
-                   detailsTable.draw();
-                   
-                   // 顯示統計
-                   $('#detailsStats').removeClass('d-none');
-                   $('#statsText').text(`找到 ${response.total || allData.length} 筆記錄`);
-                   
-                   // 隱藏自定義分頁控制
-                   $('#detailsPagination, #detailsPageInfo').hide();
-                 } else {
-                   console.log('沒有收到資料');
-                   detailsTable.clear().draw();
-                   $('#detailsStats').addClass('d-none');
-                   $('#detailsPagination, #detailsPageInfo').hide();
-                 }
-               }
-             },
-             error: function(xhr) {
-               $('#detailsLoading').addClass('d-none');
-               console.log('載入失敗:', xhr.responseText);
-               detailsTable.clear().draw();
-               $('#detailsStats').addClass('d-none');
-             }
-           });
-         }
-         
-         // 開始載入第一頁
-         loadAllPages();
-       }
 
 
 
@@ -1256,212 +1873,67 @@
          $('#detailsMinTime').val('');
          $('#detailsTypeFilter').val('');
          $('#detailsUserFilter').val('');
-         $('#detailsTableFilter').val('');
+         $('#detailsTableFilter').val(null).trigger('change'); // 清空多選 Select2
          $('.quick-filter').removeClass('active');
          loadDetailsData();
        });
 
-       // 快速篩選按鈕
+       // 簡化的快速篩選系統
+       
        $('.quick-filter').click(function() {
          const type = $(this).data('type');
          const value = $(this).data('value');
+         const isActive = $(this).hasClass('active');
          
-         $(this).toggleClass('active');
+         if (!isActive) {
+           // 先清除同類型的其他按鈕
+           $(`.quick-filter[data-type="${type}"]`).removeClass('active');
+           $(this).addClass('active');
+           
+           // 添加自定義篩選
+           $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {
+             if (settings.nTable.id !== 'detailsTable') return true;
          
          if (type === 'time') {
-           if ($(this).hasClass('active')) {
-             $('#detailsMinTime').val(value);
+               const timeText = data[1] || '';
+               const timeMatch = timeText.match(/>([\d.]+)s</);
+               const time = timeMatch ? parseFloat(timeMatch[1]) : 0;
+               
+               if (value == 1) {
+                 return time < 1; // 快速查詢
            } else {
-             $('#detailsMinTime').val('');
-           }
+                 return time >= value; // 大於指定時間
+               }
+             } else if (type === 'rows') {
+               const rowsText = data[3] || '';
+               const rowsMatch = rowsText.match(/([\d,]+)/);
+               const rows = rowsMatch ? parseInt(rowsMatch[1].replace(/,/g, '')) : 0;
+               return rows >= value;
+             }
+             return true;
+           });
+         } else {
+           $(this).removeClass('active');
+           // 移除對應的篩選函數
+           $.fn.dataTable.ext.search.pop();
          }
          
-         loadDetailsData();
+         detailsTable.draw();
+       });
+       
+       // 清除快速篩選
+       $('#clearQuickFilters').click(function() {
+         $('.quick-filter').removeClass('active');
+         
+         // 清除所有自定義篩選函數
+         while($.fn.dataTable.ext.search.length > 0) {
+           $.fn.dataTable.ext.search.pop();
+         }
+         
+         detailsTable.draw();
        });
 
-       // 效能分析功能
-       let analysisLoaded = false;
-
-       function loadAnalysisData() {
-         if (analysisLoaded) return;
-
-         $.ajax({
-           url: '/api/performance_stats',
-           method: 'GET',
-           success: function(data) {
-             $('#analysisLoading').hide();
-             analysisLoaded = true;
-
-             // 更新基本統計卡片
-             $('#totalQueries').text(data.basic_stats.total_queries.toLocaleString());
-             $('#avgTime').text(data.basic_stats.avg_query_time + 's');
-             $('#maxTime').text(data.basic_stats.max_query_time + 's');
-             $('#medianTime').text(data.basic_stats.median_query_time + 's');
-
-             // 創建圖表
-             createTypeChart(data.type_stats);
-             createTimeRangeChart(data.time_ranges);
-             createUserChart(data.user_stats);
-             createTableChart(data.table_stats);
-             updateTypePerformanceTable(data.type_performance);
-           },
-           error: function() {
-             $('#analysisLoading').html('<div class="alert alert-danger">載入效能分析資料失敗</div>');
-           }
-         });
-       }
-
-       // 創建SQL類型圓餅圖
-       function createTypeChart(typeStats) {
-         const ctx = document.getElementById('typeChart').getContext('2d');
-         new Chart(ctx, {
-           type: 'pie',
-           data: {
-             labels: Object.keys(typeStats),
-             datasets: [{
-               data: Object.values(typeStats),
-               backgroundColor: [
-                 '#007bff', '#28a745', '#ffc107', '#dc3545', '#6c757d', '#17a2b8'
-               ]
-             }]
-           },
-           options: {
-             responsive: true,
-             maintainAspectRatio: false,
-             plugins: {
-               legend: {
-                 position: 'bottom'
-               }
-             }
-           }
-         });
-       }
-
-       // 創建時間分布長條圖
-       function createTimeRangeChart(timeRanges) {
-         const ctx = document.getElementById('timeRangeChart').getContext('2d');
-         new Chart(ctx, {
-           type: 'bar',
-           data: {
-             labels: Object.keys(timeRanges),
-             datasets: [{
-               label: '查詢次數',
-               data: Object.values(timeRanges),
-               backgroundColor: 'rgba(54, 162, 235, 0.8)',
-               borderColor: 'rgba(54, 162, 235, 1)',
-               borderWidth: 1
-             }]
-           },
-           options: {
-             responsive: true,
-             maintainAspectRatio: false,
-             scales: {
-               y: {
-                 beginAtZero: true
-               }
-             }
-           }
-         });
-       }
-
-       // 創建用戶活動圖表
-       function createUserChart(userStats) {
-         const ctx = document.getElementById('userChart').getContext('2d');
-         new Chart(ctx, {
-           type: 'bar',
-           data: {
-             labels: Object.keys(userStats),
-             datasets: [{
-               label: '查詢次數',
-               data: Object.values(userStats),
-               backgroundColor: 'rgba(255, 99, 132, 0.8)',
-               borderColor: 'rgba(255, 99, 132, 1)',
-               borderWidth: 1
-             }]
-           },
-           options: {
-             indexAxis: 'y',
-             responsive: true,
-             maintainAspectRatio: false,
-             scales: {
-               x: {
-                 beginAtZero: true
-               }
-             }
-           }
-         });
-       }
-
-       // 創建表格使用圖表
-       function createTableChart(tableStats) {
-         const ctx = document.getElementById('tableChart').getContext('2d');
-         new Chart(ctx, {
-           type: 'bar',
-           data: {
-             labels: Object.keys(tableStats),
-             datasets: [{
-               label: '使用次數',
-               data: Object.values(tableStats),
-               backgroundColor: 'rgba(75, 192, 192, 0.8)',
-               borderColor: 'rgba(75, 192, 192, 1)',
-               borderWidth: 1
-             }]
-           },
-           options: {
-             responsive: true,
-             maintainAspectRatio: false,
-             scales: {
-               y: {
-                 beginAtZero: true
-               }
-             }
-           }
-         });
-       }
-
-       // 更新類型效能表格
-       function updateTypePerformanceTable(typePerformance) {
-         let html = '';
-         for (const [type, stats] of Object.entries(typePerformance)) {
-           const grade = getPerformanceGrade(stats.avg_time);
-           html += `
-             <tr>
-               <td><span class="badge bg-${getSqlTypeBadgeClass(type)}">${type}</span></td>
-               <td>${stats.count.toLocaleString()}</td>
-               <td><span class="${getTimeClass(stats.avg_time)}">${stats.avg_time}s</span></td>
-               <td><span class="${getTimeClass(stats.max_time)}">${stats.max_time}s</span></td>
-               <td><span class="badge bg-${grade.class}">${grade.text}</span></td>
-             </tr>
-           `;
-         }
-         $('#typePerformanceTable').html(html);
-       }
-
-       // 輔助函數
-       function getSqlTypeBadgeClass(type) {
-         const classes = {
-           'SELECT': 'primary',
-           'INSERT': 'success', 
-           'UPDATE': 'warning',
-           'DELETE': 'danger',
-           'OTHER': 'secondary'
-         };
-         return classes[type] || 'secondary';
-       }
-
-       function getTimeClass(time) {
-         if (time > 10) return 'text-danger fw-bold';
-         if (time > 1) return 'text-warning';
-         return 'text-success';
-       }
-
-                function getPerformanceGrade(avgTime) {
-           if (avgTime < 0.1) return { class: 'success', text: '優秀' };
-           if (avgTime < 1) return { class: 'info', text: '良好' };
-           if (avgTime < 5) return { class: 'warning', text: '普通' };
-           if (avgTime < 10) return { class: 'danger', text: '較差' };
-           return { class: 'dark', text: '極差' };
-         }
+       // 效能分析功能已移到全域 - 圖表創建函數也已移到全域
 
          // 檔案管理功能 (全域函數)
          window.loadFilesList = function() {
@@ -1537,26 +2009,37 @@
 
          
 
-         // 檔案上傳功能
+         // 檔案上傳功能 - 合併分析
          $('#uploadForm').on('submit', function(e) {
            e.preventDefault();
-           uploadFile(this);
-         });
-
-         $('#quickUploadForm').on('submit', function(e) {
-           e.preventDefault();
-           uploadFile(this);
-           $('#uploadModal').modal('hide');
-         });
-
-         function uploadFile(form) {
-           const formData = new FormData(form);
+           
+           const files = $('#logFiles')[0].files;
+           const analysisName = $('#analysisName').val().trim();
+           
+           if (files.length === 0) {
+             alert('請選擇至少一個檔案');
+             return;
+           }
+           
+           if (files.length > 20) {
+             alert('一次最多只能上傳 20 個檔案');
+             return;
+           }
+           
+           const formData = new FormData();
+           
+           // 添加所有檔案
+           for (let i = 0; i < files.length; i++) {
+             formData.append('files', files[i]);
+           }
+           // 如果名稱為空，傳遞空字串讓後端自動命名
+           formData.append('analysis_name', analysisName || '');
            
            $('#uploadProgress').removeClass('d-none');
-           $('#uploadStatusText').text('正在上傳並分析檔案，請稍候...');
+           $('#uploadStatusText').text(`正在上傳並合併分析 ${files.length} 個檔案，請稍候...`);
 
            $.ajax({
-             url: '/api/upload_log',
+             url: '/api/upload_multiple_logs',
              method: 'POST',
              data: formData,
              processData: false,
@@ -1565,10 +2048,18 @@
                $('#uploadProgress').addClass('d-none');
                
                if (response.success) {
-                 alert(`上傳成功！\n檔案：${response.analysis_name}\n查詢數：${response.total_queries}\n樣板數：${response.total_templates}`);
+                 let message = `合併分析成功！\n`;
+                 message += `分析名稱：${response.analysis_name}\n`;
+                 message += `檔案數量：${response.files_count}\n`;
+                 message += `總大小：${(response.total_size / 1024 / 1024).toFixed(2)} MB\n`;
+                 message += `查詢數：${response.total_queries}\n`;
+                 message += `樣板數：${response.total_templates}`;
+                 
+                 alert(message);
                  
                  // 清空表單
-                 $(form)[0].reset();
+                 $('#uploadForm')[0].reset();
+                 $('#filePreview').addClass('d-none');
                  
                  // 重新載入檔案列表
                  window.loadFilesList();
@@ -1576,25 +2067,13 @@
              },
              error: function(xhr) {
                $('#uploadProgress').addClass('d-none');
-               alert(`上傳失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
+               alert(`合併分析失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
              }
            });
-         }
-
-         // 上傳模式切換功能
-         $('input[name="uploadMode"]').on('change', function() {
-           const mode = $(this).val();
-           if (mode === 'single') {
-             $('#uploadForm').removeClass('d-none');
-             $('#multipleUploadForm').addClass('d-none');
-           } else {
-             $('#uploadForm').addClass('d-none');
-             $('#multipleUploadForm').removeClass('d-none');
-           }
          });
 
-         // 多檔案選擇時顯示檔案列表
-         $('#multipleLogFiles').on('change', function() {
+         // 檔案選擇時顯示檔案列表
+         $('#logFiles').on('change', function() {
            const files = this.files;
            if (files.length > 0) {
              let fileListHtml = '';
@@ -1629,75 +2108,6 @@
            } else {
              $('#filePreview').addClass('d-none');
            }
-         });
-
-         // 多檔案上傳表單提交
-         $('#multipleUploadForm').on('submit', function(e) {
-           e.preventDefault();
-           
-           const files = $('#multipleLogFiles')[0].files;
-           const analysisName = $('#multipleAnalysisName').val().trim();
-           
-           if (files.length === 0) {
-             alert('請選擇至少一個檔案');
-             return;
-           }
-           
-           if (files.length > 20) {
-             alert('一次最多只能上傳 20 個檔案');
-             return;
-           }
-           
-           // 移除名稱必填驗證，允許留空自動命名
-           // if (!analysisName) {
-           //   alert('請輸入分析檔案名稱');
-           //   return;
-           // }
-           
-           const formData = new FormData();
-           
-           // 添加所有檔案
-           for (let i = 0; i < files.length; i++) {
-             formData.append('files', files[i]);
-           }
-           // 如果名稱為空，傳遞空字串讓後端自動命名
-           formData.append('analysis_name', analysisName || '');
-           
-           $('#uploadProgress').removeClass('d-none');
-           $('#uploadStatusText').text(`正在上傳並合併分析 ${files.length} 個檔案，請稍候...`);
-           
-           $.ajax({
-             url: '/api/upload_multiple_logs',
-             method: 'POST',
-             data: formData,
-             processData: false,
-             contentType: false,
-             success: function(response) {
-               $('#uploadProgress').addClass('d-none');
-               
-               if (response.success) {
-                 let message = `批量上傳成功！\n`;
-                 message += `分析名稱：${response.analysis_name}\n`;
-                 message += `檔案數量：${response.files_count}\n`;
-                 message += `總大小：${(response.total_size / 1024 / 1024).toFixed(2)} MB\n`;
-                 message += `查詢數：${response.total_queries}\n`;
-                 message += `樣板數：${response.total_templates}`;
-                 
-                 alert(message);
-                 
-                 // 清空表單
-                 $('#multipleUploadForm')[0].reset();
-                 $('#filePreview').addClass('d-none');
-                 
-                 // 重新載入檔案列表
-                 window.loadFilesList();
-               }
-             },
-             error: function(xhr) {
-               $('#uploadProgress').addClass('d-none');
-               alert(`批量上傳失敗: ${xhr.responseJSON?.detail || '未知錯誤'}`);
-             }
-           });
          });
 
          // 合併分析檔案功能
@@ -1819,6 +2229,121 @@
            });
          }
 
+         // 批量各自分析功能
+         window.uploadSeparately = async function() {
+           const files = $('#logFiles')[0].files;
+           
+           if (!files || files.length === 0) {
+             alert('請先選擇檔案');
+             return;
+           }
+           
+           if (files.length > 20) {
+             alert('一次最多只能上傳 20 個檔案');
+             return;
+           }
+           
+           // 顯示進度
+           $('#uploadProgress').removeClass('d-none');
+           $('#uploadStatusText').text(`正在處理第 1/${files.length} 個檔案...`);
+           
+           try {
+             const results = [];
+             let successCount = 0;
+             let failCount = 0;
+             
+             // 逐一上傳每個檔案
+             for (let i = 0; i < files.length; i++) {
+               const file = files[i];
+               $('#uploadStatusText').text(`正在處理第 ${i + 1}/${files.length} 個檔案: ${file.name}`);
+               
+               try {
+                 // 創建表單數據
+                 const formData = new FormData();
+                 formData.append('file', file);
+                 
+                 // 生成檔案名稱（去除副檔名）
+                 const fileName = file.name.split('.')[0] || 'unknown';
+                 const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                 const analysisName = `${fileName}_${timestamp}`;
+                 formData.append('analysis_name', analysisName);
+                 
+                 // 發送請求
+                 const response = await $.ajax({
+                   url: '/api/upload_log',
+                   method: 'POST',
+                   data: formData,
+                   processData: false,
+                   contentType: false
+                 });
+                 
+                 results.push({
+                   success: true,
+                   filename: file.name,
+                   analysisName: response.analysis_name || analysisName,
+                   message: '上傳成功',
+                   queries: response.total_queries,
+                   templates: response.total_templates
+                 });
+                 successCount++;
+                 
+               } catch (error) {
+                 results.push({
+                   success: false,
+                   filename: file.name,
+                   message: error.responseJSON?.detail || '上傳失敗'
+                 });
+                 failCount++;
+               }
+               
+               // 添加短暫延遲避免過快請求
+               if (i < files.length - 1) {
+                 await new Promise(resolve => setTimeout(resolve, 200));
+               }
+             }
+             
+             // 隱藏進度並顯示結果
+             $('#uploadProgress').addClass('d-none');
+             
+             // 顯示結果摘要
+             const totalCount = results.length;
+             const successRate = Math.round((successCount / totalCount) * 100);
+             
+             let message = `批量各自分析完成！\n\n`;
+             message += `總共 ${totalCount} 個檔案\n`;
+             message += `成功 ${successCount} 個，失敗 ${failCount} 個\n`;
+             message += `成功率：${successRate}%\n\n`;
+             
+             if (successCount > 0) {
+               message += `成功的檔案：\n`;
+               results.filter(r => r.success).forEach(r => {
+                 message += `• ${r.filename} → ${r.analysisName}\n`;
+               });
+             }
+             
+             if (failCount > 0) {
+               message += `\n失敗的檔案：\n`;
+               results.filter(r => !r.success).forEach(r => {
+                 message += `• ${r.filename}: ${r.message}\n`;
+               });
+             }
+             
+             alert(message);
+             
+             // 如果有成功的上傳，清空表單並重新載入檔案列表
+             if (successCount > 0) {
+               $('#uploadForm')[0].reset();
+               $('#filePreview').addClass('d-none');
+               window.loadFilesList();
+             }
+             
+           } catch (error) {
+             $('#uploadProgress').addClass('d-none');
+             console.error('批量上傳錯誤:', error);
+             alert(`批量上傳失敗: ${error.message || '未知錯誤'}`);
+           }
+         };
+
          // 按鈕事件
          $('#uploadLogBtn').click(function() {
            $('#uploadModal').modal('show');
@@ -1849,13 +2374,88 @@
            window.loadFilesList();
          });
 
-                  // 複製 SQL 功能
-         $(document).on('click', '#copySqlBtn, #copySqlBtn2', function() {
-           const sqlContent = $('#sqlDetailContent').text();
+         // 格式化切換按鈕
+         $(document).on('click', '#toggleSqlFormatBtn', function() {
+           if (!currentSqlDetailItem) {
+             alert('無法取得查詢資料');
+             return;
+           }
+           
+           console.log('切換前狀態:', isFormatted); // 除錯用
+           
+           // 切換格式化狀態
+           isFormatted = !isFormatted;
+           
+           console.log('切換後狀態:', isFormatted); // 除錯用
+           
+           updateFormatButton();
+           updateSqlDisplay();
+         });
+
+         // 複製當前顯示的 SQL
+         $(document).on('click', '#copySqlDisplayBtn', function() {
            const $btn = $(this);
            
+           // 直接複製畫面上顯示的內容
+           const displayedSql = $('#sqlDetailContent').text();
+           
+           if (!displayedSql) {
+             alert('無可複製的 SQL 內容');
+             return;
+           }
+           
+           copyToClipboard(displayedSql, $btn, 'SQL');
+         });
+
+         // 下方按鈕：複製格式化資料功能
+         $(document).on('click', '#copyFormattedDataBtn', function() {
+           const $btn = $(this);
+           
+           if (!currentSqlDetailItem) {
+             alert('無法取得查詢資料');
+             return;
+           }
+           
+           // 格式化完整的查詢資料
+           const dataText = `=== SQL 慢查詢資料 ===
+SQL 類型：${currentSqlDetailItem.sql_type || 'OTHER'}
+查詢時間：${currentSqlDetailItem.query_time || 0}s
+鎖定時間：${currentSqlDetailItem.lock_time || 0}s
+檢查行數：${(currentSqlDetailItem.rows_examined || 0).toLocaleString()}
+回傳行數：${(currentSqlDetailItem.rows_sent || 0).toLocaleString()}
+用戶@主機：${currentSqlDetailItem.user || ''}@${currentSqlDetailItem.host || ''}
+資料庫：${currentSqlDetailItem.schema || '-'}
+使用表格：${currentSqlDetailItem.tables_used && currentSqlDetailItem.tables_used.length > 0 ? currentSqlDetailItem.tables_used.join(', ') : '無明確表格'}
+執行時間：${currentSqlDetailItem.time || '未知'}
+
+SQL 查詢內容：
+${currentSqlDetailItem.sql || ''}
+`;
+           
+           copyToClipboard(dataText, $btn, '格式化資料');
+         });
+
+         // 下方按鈕：複製 JSON 資料功能
+         $(document).on('click', '#copyJsonDataBtn', function() {
+           const $btn = $(this);
+           
+           if (!currentSqlDetailItem) {
+             alert('無法取得查詢資料');
+             return;
+           }
+           
+           // 創建完整的 JSON 資料
+           const jsonData = JSON.stringify(currentSqlDetailItem, null, 2);
+           
+           copyToClipboard(jsonData, $btn, 'JSON 資料');
+         });
+
+
+
+         // 通用複製函數
+         function copyToClipboard(content, $btn, dataType) {
            if (navigator.clipboard) {
-             navigator.clipboard.writeText(sqlContent).then(function() {
+             navigator.clipboard.writeText(content).then(function() {
                // 暫時變更按鈕文字顯示成功
                const originalText = $btn.html();
                $btn.html('<i class="fas fa-check me-1"></i>已複製');
@@ -1866,36 +2466,22 @@
                alert('複製失敗，請手動選擇複製');
              });
            } else {
-             // 降級方案：選擇文字
-             const sqlElement = document.getElementById('sqlDetailContent');
-             if (window.getSelection && document.createRange) {
-               const selection = window.getSelection();
-               const range = document.createRange();
-               range.selectNodeContents(sqlElement);
-               selection.removeAllRanges();
-               selection.addRange(range);
-               alert('SQL 已選擇，請按 Ctrl+C 複製');
-             } else {
-               alert('瀏覽器不支援自動複製，請手動選擇複製');
-             }
+             // 降級方案：顯示在新視窗讓用戶手動複製
+             const newWindow = window.open('', '_blank');
+             newWindow.document.write(`
+               <html>
+                 <head><title>SQL 查詢${dataType}</title></head>
+                 <body>
+                   <pre style="font-family: monospace; white-space: pre-wrap; padding: 20px;">${content}</pre>
+                   <p>請選擇上方文字並按 Ctrl+C 複製</p>
+                 </body>
+               </html>
+             `);
+             newWindow.document.close();
            }
-         });
+         }
 
-                  // 自動填入分析名稱
-         $('#logFile, #quickLogFile').change(function() {
-           const file = this.files[0];
-           if (file) {
-             const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-             const filename = file.name.replace(/\.(log|txt)$/, '');
-             const suggestedName = `${filename}_${timestamp}`;
-             
-             if (this.id === 'logFile') {
-               $('#analysisName').val(suggestedName);
-             } else {
-               $('#quickAnalysisName').val(suggestedName);
-             }
-           }
-         });
+         
 
          // 頁面載入完成後，檢查是否需要初始化原始查詢列表
          // 注意：預設是樣板統計頁面，只有在用戶切換到原始查詢列表時才初始化

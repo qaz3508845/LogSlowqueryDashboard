@@ -141,15 +141,30 @@
                             name="analysis_name"
                             class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             placeholder="例如：合併分析_2024-01-15 (留空則自動命名)">
-                        <p class="mt-1 text-xs text-gray-500">批量檔案將合併為一個分析，留空則自動命名</p>
+                        <p class="mt-1 text-xs text-gray-500">
+                            <strong>合併分析：</strong>批量檔案將合併為一個分析<br>
+                            <strong>各自分析：</strong>忽略此欄位，每個檔案會自動命名並各自分析
+                        </p>
                     </div>
                     
-                    <button 
-                        type="submit"
-                        class="w-full flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                        <i class="fas fa-layer-group mr-2"></i>
-                        批量上傳並合併分析
-                    </button>
+                    <!-- 按鈕組 -->
+                    <div class="space-y-3">
+                        <button 
+                            type="submit"
+                            class="w-full flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <i class="fas fa-layer-group mr-2"></i>
+                            批量上傳並合併分析
+                        </button>
+                        
+                        <button 
+                            type="button"
+                            @click="uploadSeparately()"
+                            :disabled="selectedFiles.length === 0"
+                            class="w-full flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <i class="fas fa-file-alt mr-2"></i>
+                            批量上傳並各自分析
+                        </button>
+                    </div>
                 </form>
 
                 <!-- 上傳指示器 -->
@@ -230,6 +245,180 @@ function fileManager() {
         
         formatFileSize(bytes) {
             return window.formatFileSize(bytes);
+        },
+        
+        async uploadSeparately() {
+            if (this.selectedFiles.length === 0) {
+                alert('請先選擇檔案');
+                return;
+            }
+            
+            // 顯示載入狀態
+            const indicator = document.getElementById('upload-indicator');
+            const resultDiv = document.getElementById('upload-result');
+            
+            if (indicator) {
+                indicator.style.display = 'block';
+            }
+            
+            try {
+                const results = [];
+                let successCount = 0;
+                let failCount = 0;
+                
+                // 更新進度顯示
+                const updateProgress = (current, total) => {
+                    if (indicator) {
+                        const progressText = indicator.querySelector('p');
+                        if (progressText) {
+                            progressText.textContent = `正在處理第 ${current}/${total} 個檔案...`;
+                        }
+                    }
+                };
+                
+                // 逐一上傳每個檔案
+                for (let i = 0; i < this.selectedFiles.length; i++) {
+                    const file = this.selectedFiles[i];
+                    updateProgress(i + 1, this.selectedFiles.length);
+                    
+                    try {
+                        // 創建表單數據
+                        const formData = new FormData();
+                        formData.append('file', file);
+                        
+                        // 生成檔案名稱（去除副檔名）
+                        const fileName = file.name.split('.')[0] || 'unknown';
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                        const analysisName = `${fileName}_${timestamp}`;
+                        formData.append('analysis_name', analysisName);
+                        
+                        // 發送請求
+                        const response = await fetch('/api/upload_log', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            results.push({
+                                success: true,
+                                filename: file.name,
+                                analysisName: result.analysis_name || analysisName,
+                                message: '上傳成功'
+                            });
+                            successCount++;
+                        } else {
+                            results.push({
+                                success: false,
+                                filename: file.name,
+                                message: result.detail || '上傳失敗'
+                            });
+                            failCount++;
+                        }
+                    } catch (error) {
+                        results.push({
+                            success: false,
+                            filename: file.name,
+                            message: `上傳錯誤: ${error.message}`
+                        });
+                        failCount++;
+                    }
+                    
+                    // 添加短暫延遲避免過快請求
+                    if (i < this.selectedFiles.length - 1) {
+                        await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                }
+                
+                // 顯示結果
+                this.showUploadResults(results, successCount, failCount);
+                
+                // 如果有成功的上傳，刷新檔案列表
+                if (successCount > 0) {
+                    const filesList = document.getElementById('files-list');
+                    if (filesList) {
+                        // 觸發檔案列表重新載入
+                        htmx.trigger(filesList, 'load');
+                    }
+                }
+                
+            } catch (error) {
+                console.error('批量上傳錯誤:', error);
+                if (resultDiv) {
+                    resultDiv.innerHTML = `
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                            <div class="flex items-center">
+                                <i class="fas fa-exclamation-triangle text-red-600 mr-2"></i>
+                                <span class="text-red-800">批量上傳失敗: ${error.message}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+            } finally {
+                // 隱藏載入指示器
+                if (indicator) {
+                    indicator.style.display = 'none';
+                }
+            }
+        },
+        
+        showUploadResults(results, successCount, failCount) {
+            const resultDiv = document.getElementById('upload-result');
+            if (!resultDiv) return;
+            
+            const totalCount = results.length;
+            const successRate = Math.round((successCount / totalCount) * 100);
+            
+            let resultHTML = `
+                <div class="space-y-4">
+                    <!-- 總結 -->
+                    <div class="bg-${successCount === totalCount ? 'green' : failCount === totalCount ? 'red' : 'yellow'}-50 border border-${successCount === totalCount ? 'green' : failCount === totalCount ? 'red' : 'yellow'}-200 rounded-lg p-4">
+                        <div class="flex items-center mb-2">
+                            <i class="fas fa-${successCount === totalCount ? 'check-circle' : failCount === totalCount ? 'times-circle' : 'exclamation-triangle'} text-${successCount === totalCount ? 'green' : failCount === totalCount ? 'red' : 'yellow'}-600 mr-2"></i>
+                            <h4 class="font-medium text-${successCount === totalCount ? 'green' : failCount === totalCount ? 'red' : 'yellow'}-800">
+                                批量各自分析完成
+                            </h4>
+                        </div>
+                        <p class="text-${successCount === totalCount ? 'green' : failCount === totalCount ? 'red' : 'yellow'}-700">
+                            總共 ${totalCount} 個檔案，成功 ${successCount} 個，失敗 ${failCount} 個 (成功率: ${successRate}%)
+                        </p>
+                    </div>
+                    
+                    <!-- 詳細結果 -->
+                    <div class="bg-white border border-gray-200 rounded-lg">
+                        <div class="px-4 py-3 border-b border-gray-200">
+                            <h5 class="font-medium text-gray-900">詳細結果</h5>
+                        </div>
+                        <div class="max-h-64 overflow-y-auto">
+            `;
+            
+            results.forEach((result, index) => {
+                resultHTML += `
+                    <div class="px-4 py-3 border-b border-gray-100 last:border-b-0">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center">
+                                <i class="fas fa-${result.success ? 'check-circle text-green-500' : 'times-circle text-red-500'} mr-2"></i>
+                                <span class="font-medium text-gray-900">${result.filename}</span>
+                            </div>
+                            <span class="text-sm text-gray-500">${result.message}</span>
+                        </div>
+                        ${result.success && result.analysisName ? `
+                            <div class="mt-1 text-sm text-gray-600">
+                                分析名稱: <code class="bg-gray-100 px-1 rounded">${result.analysisName}</code>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+            
+            resultHTML += `
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            resultDiv.innerHTML = resultHTML;
         }
     }
 }
